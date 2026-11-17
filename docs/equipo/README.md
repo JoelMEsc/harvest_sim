@@ -2,14 +2,14 @@
 
 Este es el punto de partida. Cada quien tiene su carpeta con una guía paso a paso:
 
-| Persona | Rol | Guía | Estado al lunes 16 |
+| Persona | Rol | Guía | Estado al martes 17 |
 |---|---|---|---|
-| Carlos | Mundo (configuración, mundo, simulación) | [carlos/guia.md](carlos/guia.md) | Por hacer |
-| Oswaldo | Rutas y carro | [oswaldo/guia.md](oswaldo/guia.md) | Por hacer |
-| Emilio | Mensajes y cosechadora | [emilio/guia.md](emilio/guia.md) | Por hacer |
-| Giovanni | Interfaz (visor, CLI y dashboard) | [giovanni/guia.md](giovanni/guia.md) | Por hacer |
-| Ilan | Pruebas, CI, scripts y README | [ilan/guia.md](ilan/guia.md) | Por hacer |
-| Joel | Datos (trace, métricas, gráficas, experimentos) | [joel/estado.md](joel/estado.md) | Hecho, salvo lo que espera la simulación |
+| Carlos | Mundo (configuración, mundo, simulación) | [carlos/guia.md](carlos/guia.md) | **Hecho e integrado** |
+| Oswaldo | Rutas y carro | [oswaldo/guia.md](oswaldo/guia.md) | **Hecho e integrado** |
+| Emilio | Mensajes y cosechadora | [emilio/guia.md](emilio/guia.md) | **Hecho e integrado** |
+| Mario Giovanni | Interfaz (visor, CLI y dashboard) | [giovanni/guia.md](giovanni/guia.md) | **Hecho e integrado** |
+| Ilan | Pruebas, CI, scripts y README | [ilan/guia.md](ilan/guia.md) | **Hecho e integrado** |
+| Joel | Datos (trace, métricas, gráficas, experimentos) | [joel/estado.md](joel/estado.md) | **Hecho e integrado**; falta el PDF |
 
 **Fecha límite:** martes 17 de noviembre, **antes de la clase**. Se entrega **un PDF** en Canvas (rúbrica nueva, §5 de este documento) y el repositorio con `main` actualizado.
 
@@ -143,7 +143,7 @@ Cada responsable le manda a Joel su sección (texto e imágenes) **antes del mar
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                                                       # 105 pasan; 53 en skip (las de ustedes)
+pytest                                                       # 230 pasan, ninguna en skip
 python tools/generar_trace_ejemplo.py --escenarios           # 3 traces de ejemplo en runs/ejemplo/
 python tools/validar_trace.py runs/ejemplo/*/trace.json      # valida el contrato
 python viz/plots.py runs/ejemplo/*/trace.json                # 6 gráficas por corrida + comparación y tabla

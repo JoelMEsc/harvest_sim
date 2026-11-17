@@ -1,0 +1,8 @@
+{
+  "nombre": "tasa_transferencia",
+  "descripcion": "Sensibilidad del tiempo de completación a la tasa de transferencia, en los tres escenarios.",
+  "escenarios": ["config/escenario_a.json", "config/escenario_b.json", "config/escenario_c.json"],
+  "barrido": {"tasa_transferencia": [1, 2, 3, 5]},
+  "repeticiones": 1,
+  "metrica": "tiempo_completacion"
+}
