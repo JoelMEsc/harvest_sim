@@ -1,7 +1,6 @@
 """Corridas completas de extremo a extremo.  [Dueño: Ilan]
 
-Se marcan `skip` hasta que la simulación completa (simulacion.ejecutar) funcione;
-entonces se quita el decorador. Deben pasar con los tres escenarios.
+Activos desde la integración del 17 de noviembre: corren la simulación real con los tres escenarios.
 """
 
 import math
@@ -21,8 +20,6 @@ from harvest_sim.datos import (
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
 ESCENARIOS = ["escenario_a", "escenario_b", "escenario_c"]
 
-pendiente = pytest.mark.skip(reason="pendiente — espera la integración (simulacion.ejecutar)")
-
 
 def obtener_trace(nombre: str) -> dict:
     """Carga la configuración y ejecuta una corrida completa de un escenario."""
@@ -40,7 +37,6 @@ def trace(request):
     return obtener_trace(request.param)
 
 
-@pendiente
 def test_no_comparten_celda(trace):
     """R3: dos agentes nunca ocupan la misma celda, en ningún tick."""
     for est in reconstruir(trace):
@@ -55,7 +51,6 @@ def test_no_comparten_celda(trace):
                 posiciones.append(pos)
 
 
-@pendiente
 def test_no_intercambian_posicion(trace):
     """R4: dos agentes nunca intercambian posiciones entre ticks consecutivos."""
     prev_poses = None
@@ -80,7 +75,6 @@ def test_no_intercambian_posicion(trace):
         prev_poses = curr_poses
 
 
-@pendiente
 def test_un_paso_por_tick(trace):
     """R2: cada agente se mueve a lo más una celda por tick (vecindad de 4, distancia Manhattan <= 1)."""
     prev_poses = None
@@ -102,7 +96,6 @@ def test_un_paso_por_tick(trace):
         prev_poses = curr_poses
 
 
-@pendiente
 def test_conservacion_de_grano(trace):
     """R7: grano cosechado = grano en cosechadora + grano en carro + grano entregado, en CADA tick."""
     grano_por_celda = trace["mundo"]["grano_por_celda"]
@@ -119,7 +112,6 @@ def test_conservacion_de_grano(trace):
         )
 
 
-@pendiente
 def test_terminacion(trace):
     """La corrida termina y cumple las condiciones del §5.4 en los tres escenarios."""
     estados = list(reconstruir(trace))
@@ -142,7 +134,6 @@ def test_terminacion(trace):
     assert len(final["mensajes_en_transito"]) == 0, "No deben quedar mensajes en tránsito al terminar"
 
 
-@pendiente
 def test_inicio_y_regreso_a_base(trace):
     """Ambos agentes empiezan en su casilla de inicio y terminan en ella."""
     estados = list(reconstruir(trace))
@@ -162,7 +153,6 @@ def test_inicio_y_regreso_a_base(trace):
         )
 
 
-@pendiente
 def test_duracion_de_estados_en_el_log(trace):
     """Cada tramo de TRANSFIRIENDO / DESCARGANDO dura exactamente ceil(cantidad / tasa) ticks."""
     tasa_trans = trace["config"]["tasa_transferencia"]
@@ -191,7 +181,6 @@ def test_duracion_de_estados_en_el_log(trace):
                     ticks_en_estado = 0
 
 
-@pendiente
 def test_mensaje_pendiente_no_se_pierde(trace):
     """Cada MENSAJE_ENVIADO tiene su respectivo MENSAJE_ENTREGADO en entrega_en."""
     enviados = {}
@@ -216,7 +205,6 @@ def test_mensaje_pendiente_no_se_pierde(trace):
         )
 
 
-@pendiente
 def test_mensajes_viajan_al_tick_siguiente(trace):
     """En el log, entrega_en == tick_envio + 1 para todos los mensajes enviados."""
     for tick_info in trace["ticks"]:
@@ -228,7 +216,6 @@ def test_mensajes_viajan_al_tick_siguiente(trace):
                 )
 
 
-@pendiente
 def test_checksum_de_todo_el_log(trace):
     """verificar_checksums(trace) es True y validar_trace(trace) no arroja errores."""
     assert verificar_checksums(trace) is True, "Los checksums SHA-256 del trace no coinciden"
@@ -236,7 +223,6 @@ def test_checksum_de_todo_el_log(trace):
     assert errores == [], f"El trace no cumple el contrato del esquema 2.1: {errores}"
 
 
-@pendiente
 @pytest.mark.parametrize("nombre", ESCENARIOS)
 def test_reproducibilidad(nombre):
     """Dos corridas del mismo escenario producen trace.json idéntico byte a byte."""
@@ -247,7 +233,6 @@ def test_reproducibilidad(nombre):
     )
 
 
-@pendiente
 def test_grano_entregado_igual_al_del_campo(trace):
     """metricas.grano_total_entregado == metricas.grano_esperado_total == grano_esperado(mundo)."""
     esperado = grano_esperado(trace["mundo"])
@@ -261,7 +246,6 @@ def test_grano_entregado_igual_al_del_campo(trace):
     assert metricas["grano_esperado_total"] == esperado
 
 
-@pendiente
 def test_cambios_reconstruyen_el_mapa(trace):
     """Aplicando los cambios del log se obtienen exactamente las celdas de campo cosechadas, una sola vez."""
     estados = list(reconstruir(trace))
