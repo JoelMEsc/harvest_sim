@@ -2,6 +2,8 @@
 
 Reto agrícola multiagente con John Deere · Equipo 3 · TC2008B.
 
+**Link de la carpeta de Drive para evidencias:** [Google Drive](https://drive.google.com/drive/folders/1XX1WP433XIvwLuCjnjkFnRm9IYrBwJON?usp=sharing)
+
 Una **cosechadora** recorre un campo en cuadrícula en serpentina. Cuando se llena, le manda un mensaje al **carro recolector**, que va hasta ella, recibe el grano y lo lleva a la **bodega**. El tiempo que la cosechadora pasa llena esperando al carro es el **tiempo ocioso**, la métrica principal del reto. Esta versión es la **línea base reactiva** (el carro sale solo cuando la cosechadora ya está llena), contra la que se compararán las mejoras de coordinación.
 
 La simulación está escrita en Python y produce un log por corrida (`trace.json`). El visor, las métricas, las gráficas, los experimentos y el dashboard **solo leen ese archivo**: la simulación es la única fuente de verdad.
