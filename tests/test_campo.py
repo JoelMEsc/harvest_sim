@@ -39,10 +39,10 @@ def test_expandir_celdas_y_regiones():
 
 
 @pytest.mark.parametrize("seccion, fragmento", [
-    ({"celdas": [[6, 1]]}, "se sale del mapa"),
-    ({"celdas": [[1, -1]]}, "se sale del mapa"),
+    ({"celdas": [[6, 1]]}, "fuera del mapa"),
+    ({"celdas": [[1, -1]]}, "fuera del mapa"),
     ({"celdas": [[2, 0]]}, "fila 0"),
-    ({"regiones": [{"inicio": [4, 3], "tamano": [3, 1]}]}, "se sale del mapa"),
+    ({"regiones": [{"inicio": [4, 3], "tamano": [3, 1]}]}, "fuera del mapa"),
     ({"regiones": [{"inicio": [1, 1], "tamano": [0, 2]}]}, "tamaño debe ser >= 1"),
     ({"celdas": [[1, "2"]]}, "debe ser [x, y]"),
     ({"regiones": [{"inicio": [1, 1]}]}, "inicio"),

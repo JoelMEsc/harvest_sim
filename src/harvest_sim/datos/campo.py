@@ -48,7 +48,7 @@ def expandir_obstaculos(seccion: dict | None, ancho: int, alto: int) -> list[lis
 
     def agregar(x, y, origen):
         if not (0 <= x < ancho and 0 <= y < alto):
-            raise ValueError(f"obstaculos: {origen} se sale del mapa ({ancho} x {alto}) en ({x}, {y})")
+            raise ValueError(f"obstaculos: {origen} queda fuera del mapa ({ancho} x {alto}) en ({x}, {y})")
         if y == 0:
             raise ValueError(f"obstaculos: {origen} está en la fila 0 (servicio: bodega y bases) en ({x}, {y})")
         celdas.add((x, y))

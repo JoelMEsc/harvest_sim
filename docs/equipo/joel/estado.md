@@ -1,6 +1,6 @@
 # Datos (Joel) — estado y cómo usar las herramientas
 
-**Estado al lunes 16:** todo lo de Datos está hecho. Lo único pendiente depende de la simulación: correr los escenarios reales, generar resultados y escribir las secciones 4, 5 y 7 del PDF.
+**Estado al martes 17:** todo lo de Datos está hecho e integrado con la simulación real (los tres escenarios validan). Falta escribir las secciones 4, 5 y 7 y armar el PDF.
 
 **Archivos de Datos:** `src/harvest_sim/datos/` (paquete), `src/harvest_sim/telemetria.py` (fachada), `viz/plots.py`, `tools/generar_trace_ejemplo.py`, `tools/validar_trace.py`, `tools/correr_experimento.py`, `config/experimentos/`, `tests/fixtures/`, `tests/ayuda_datos.py`, `tests/test_trace.py`, `tests/test_metricas.py`, `tests/test_campo.py`, `tests/test_validador.py`, `tests/test_generador.py`, `tests/test_plots.py`, `tests/test_experimentos.py`.
 
@@ -29,10 +29,10 @@ python tools/correr_experimento.py config/experimentos/tasa_transferencia.json  
 python tools/generar_trace_ejemplo.py                           # regenera el fixture de las pruebas
 ```
 
-## Pendiente (cuando exista `simulacion.ejecutar`)
+## Pendiente
 
-1. Correr los tres escenarios, validar los traces y generar gráficas, tabla y experimento.
-2. Cambiar el fixture por una corrida corta de la simulación real (el generador de ejemplo queda como herramienta de prueba).
+1. ~~Correr los tres escenarios, validar los traces y generar gráficas, tabla y experimento.~~ Hecho el 17 de noviembre (`bash scripts/correr_todos.sh`).
+2. Después de la entrega: cambiar el fixture por una corrida corta de la simulación real (el generador de ejemplo queda como herramienta de prueba).
 3. Escribir las secciones 4 (diseño experimental), 5 (métricas y resultados) y 7 (análisis crítico) del PDF.
 4. Juntar las secciones de todos (llegan antes del martes a mediodía), armar el documento final y subirlo a Canvas.
 

@@ -1,7 +1,7 @@
 """Mundo: layout, serpentina y movimiento de grano (R5-R9).  [Dueño: Ilan, escritos desde la especificación]
 
 Estos tests los escribe quien NO implementa el mundo, a partir de la especificación.
-Se marcan `skip` hasta que `mundo.py` entre a development; entonces se quita el decorador.
+Activos desde la integración del 17 de noviembre.
 """
 
 from dataclasses import dataclass, field
@@ -64,7 +64,6 @@ def crear_config(
         )
 
 
-@pendiente
 def test_casillas_de_inicio():
     """Bodega (0,0); bases de carros (1..n,0); de cosechadoras (n+1..n+m,0), con n y m genéricos."""
     from harvest_sim.mundo import Mundo
@@ -87,7 +86,6 @@ def test_casillas_de_inicio():
     assert mundo_gen.base_de("cosechadora_3") == (5, 0)
 
 
-@pendiente
 def test_serpentina_cubre_todo_el_campo():
     """El camino visita cada celda del campo (y >= 1) exactamente una vez; empieza en (0,1)."""
     from harvest_sim.mundo import Mundo
@@ -101,6 +99,7 @@ def test_serpentina_cubre_todo_el_campo():
     celdas_esperadas = {(x, y) for y in range(1, alto) for x in range(ancho)}
     assert set(camino) == celdas_esperadas, "Debe visitar todas las celdas con y >= 1"
     assert len(camino) == len(celdas_esperadas), "No debe haber celdas repetidas en el camino"
+
 
 def test_serpentina_alterna_direccion():
     """Fila 1 de izquierda a derecha, fila 2 de derecha a izquierda, etc."""
@@ -117,6 +116,7 @@ def test_serpentina_alterna_direccion():
             assert tramo_fila == [(x, y) for x in range(ancho)]
         else:           # Fila par (2, 4, ...): derecha a izquierda
             assert tramo_fila == [(x, y) for x in range(ancho - 1, -1, -1)]
+
 
 def test_transferencia_solo_entre_vecinos():
     """R5: transferir con agentes no vecinos falla."""
@@ -139,6 +139,7 @@ def test_transferencia_solo_entre_vecinos():
     carro.posicion = (3, 3)
     with pytest.raises(ValueError, match="vecinos"):
         mundo.transferir("cosechadora_1", "carro_1", 5)
+
 
 def test_transferencia_respeta_capacidad():
     """R6: δ = min(q_cosechadora, Q_carro - q_carro); incluir caso con capacidad libre < carga."""
@@ -170,6 +171,7 @@ def test_transferencia_respeta_capacidad():
     assert cosechadora.carga == 5
     assert carro.carga == 10
 
+
 def test_celda_cosechada_una_vez():
     """R8: cosechar dos veces la misma celda no produce grano la segunda vez (o falla)."""
     from harvest_sim.mundo import Mundo
@@ -191,6 +193,7 @@ def test_celda_cosechada_una_vez():
     with pytest.raises(ValueError, match="cosechada"):
         mundo.cosechar("cosechadora_1", celda)
 
+
 def test_cosechadora_no_entra_a_bodega():
     """R9: bloqueadas_fijas de una cosechadora incluye (0,0); la del carro no."""
     from harvest_sim.mundo import Mundo
@@ -204,6 +207,7 @@ def test_cosechadora_no_entra_a_bodega():
 
     assert (0, 0) in mundo.bloqueadas_fijas("cosechadora_1")
     assert (0, 0) not in mundo.bloqueadas_fijas("carro_1")
+
 
 def test_deposito_actualiza_entregado():
     """depositar() mueve la carga del carro a `entregado` y deja su carga en 0."""
@@ -228,6 +232,7 @@ def test_deposito_actualiza_entregado():
     assert carro.carga == 0
     assert mundo.entregado == 15
 
+
 def test_duracion_ticks():
     """ceil(cantidad / tasa), mínimo 1: (10,2)->5, (3,2)->2, (1,4)->1."""
     from harvest_sim.mundo import duracion_ticks
@@ -236,6 +241,7 @@ def test_duracion_ticks():
     assert duracion_ticks(3, 2) == 2
     assert duracion_ticks(1, 4) == 1
     assert duracion_ticks(0, 2) == 1  # Duración mínima de 1 tick
+
 
 def test_cosechar_registra_cambio():
     """cosechar agrega {tipo: CELDA_COSECHADA, celda, agente}; depositar agrega
@@ -268,6 +274,7 @@ def test_cosechar_registra_cambio():
     # 4. Segunda llamada a drenar_eventos debe devolver lista vacía
     assert mundo.drenar_eventos() == []
 
+
 def test_registrar_bloqueo():
     """registrar_bloqueo registra {tipo: BLOQUEO, agente: id} y drenar_eventos lo vacía."""
     from harvest_sim.mundo import Mundo
@@ -281,6 +288,7 @@ def test_registrar_bloqueo():
     eventos = mundo.drenar_eventos()
     assert eventos == [{"tipo": "BLOQUEO", "agente": "carro_1"}]
     assert mundo.drenar_eventos() == []
+
 
 def test_descripcion_del_mundo():
     """descripcion() trae ancho, alto, bodega, bases (con listas, no tuplas), grano_por_celda y obstaculos."""
