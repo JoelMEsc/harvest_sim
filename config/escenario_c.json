@@ -10,5 +10,9 @@
   "capacidad_carro": 10,
   "tasa_transferencia": 1,
   "tasa_descarga": 1,
-  "max_ticks": 5000
+  "max_ticks": 5000,
+  "obstaculos": {
+    "celdas": [],
+    "regiones": []
+  }
 }
