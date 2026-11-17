@@ -14,8 +14,8 @@ Este documento presenta la autoevaluación detallada del proyecto frente a los 8
 |---|:---:|:---:|---|---|
 | **1. Formulación** | 10 / 10 | Excelente | Formulación matemática rigurosa, FSM formal para ambos agentes, protocolo de mensajería asíncrona con performativas KQML/FIPA-ACL y ontología compartida. | `docs/especificacion_primera_entrega.md` §1–§5, `docs/ontologia.md`, `src/harvest_sim/datos/formato.py` |
 | **2. Modelado del entorno** | 15 / 15 | Excelente | Grid 2D con fila de servicio diferenciada, cálculo genérico de bases ($n, m$), implementación estricta de las 9 reglas físicas R1–R9 e invariantes verificadas. | `src/harvest_sim/mundo.py`, `src/harvest_sim/rutas.py`, `tests/test_mundo.py` |
-| **3. Implementación** | 15 / 15 | Excelente | Arquitectura desacoplada en capas (configuración, simulación, datos/telemetría, visualización), determinismo estricto, suite de pruebas automatizadas con 105 tests unitarios y 98 tests de reglas físicas e integración. | `src/harvest_sim/`, `viz/`, `tools/`, `tests/`, `README.md` |
-| **4. Diseño experimental** | 15 / 15 | Excelente | 3 escenarios parametrizados formalmente contrastados (A, B, C), barrido sistemático de parámetros operativos, 12 repeticiones estadísticas con cálculo de media, desviación estándar e IC 95 %. | `config/escenario_*.json`, `config/experimentos/`, `tools/correr_experimento.py` |
+| **3. Implementación** | 15 / 15 | Excelente | Arquitectura desacoplada en capas (configuración, simulación, datos/telemetría, visualización), determinismo estricto, suite de 230 pruebas automatizadas (unitarias, reglas físicas e integración con la simulación real). | `src/harvest_sim/`, `viz/`, `tools/`, `tests/`, `README.md` |
+| **4. Diseño experimental** | 15 / 15 | Excelente | 3 escenarios parametrizados formalmente contrastados (A, B, C), barrido sistemático de parámetros operativos, 12 corridas (3 escenarios × 4 tasas de transferencia) con resumen de media, desviación estándar e IC 95 % (la simulación es determinista: una repetición por combinación, sin variación entre repeticiones). | `config/escenario_*.json`, `config/experimentos/`, `tools/correr_experimento.py` |
 | **5. Métricas** | 15 / 15 | Excelente | Indicadores operativos directos (tiempo ocioso de cosecha, utilización de carro, flujo de grano), análisis de sensibilidad, tablas agregadas en CSV/Markdown y gráficos comparativos. | `src/harvest_sim/datos/metricas.py`, `runs/comparacion/`, `viz/plots.py` |
 | **6. Visualización y dashboard** | 10 / 10 | Excelente | Dashboard web HTML autocontenido (`dashboard.html`) con los 3 paneles obligatorios (entorno, indicadores y experimental) más visor 2D interactivo con pygame. | `viz/viewer.py`, `viz/dashboard.py`, `runs/dashboard.html` |
 | **7. Análisis crítico** | 10 / 10 | Excelente | Identificación cuantitativa del cuello de botella reactivo, análisis de rendimientos decrecientes en tasas de transferencia y justificación para coordinación proactiva en futuras entregas. | Sección 7 del informe, `docs/plan_de_trabajo.md` |
@@ -33,7 +33,7 @@ Este documento presenta la autoevaluación detallada del proyecto frente a los 8
 * **Protocolo de Comunicación:** Buzón asíncrono determinista con entrega al tick siguiente ($t+1$). Mensajes con performativas formales:
   * `LLENA`: performativa `request` (la cosechadora solicita recolección indicando su ubicación).
   * `TRANSFERENCIA_TERMINADA`: performativa `inform` (indica cantidad transferida y sincroniza la reanudación del cosechado).
-* **Ontología Compartida:** Tipos y relaciones alineados con normas ontológicas (IEEE 1872-2015 CORA y W3C PROV-O), formalizados en `docs/ontologia.md`.
+* **Ontología Compartida:** Tipos y relaciones alineados con normas ontológicas (IEEE 1872 CORA, IEEE 1872.2 e IEEE 1873), formalizados en `docs/ontologia.md`.
 
 ### 2. Modelado del Entorno (15 / 15)
 * **Estructura del Grid:** Matriz de $ancho \times alto$. Fila 0 reservada para servicios y tránsito:
@@ -51,7 +51,7 @@ Este documento presenta la autoevaluación detallada del proyecto frente a los 8
   * **R7 (Conservación global):** En todo tick, $\text{grano cosechado} = \sum \text{carga en agentes} + \text{entregado en bodega}$.
   * **R8 (No duplicidad de cosecha):** Cada celda se cosecha una sola vez.
   * **R9 (Acceso a bodega):** Cosechadoras tienen bloqueada permanentemente la coordenada $(0, 0)$.
-* **Evidencia:** [src/harvest_sim/mundo.py](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/src/harvest_sim/mundo.py) y [tests/test_mundo.py](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/tests/test_mundo.py).
+* **Evidencia:** [src/harvest_sim/mundo.py](../src/harvest_sim/mundo.py) y [tests/test_mundo.py](../tests/test_mundo.py).
 
 ---
 
@@ -63,9 +63,9 @@ El sistema `harvest_sim` se diseñó bajo una arquitectura modular y desacoplada
 2. **Núcleo de Simulación (`harvest_sim.mundo`, `simulacion`, `rutas`):** El estado físico y las operaciones con grano son centralizadas en el `Mundo`, evitando acoplamiento entre agentes. El cálculo de rutas utiliza BFS determinista con desempate ortogonal fijo (`N, E, S, O`).
 3. **Agentes Reactivos (`harvest_sim.cosechadora`, `carro`):** Máquinas de estados finitos que actúan únicamente con percepción local del entorno y mensajes recibidos en su buzón.
 4. **Capa de Datos y Telemetría (`harvest_sim.datos`):** Genera la traza estándar `trace.json` (formato 2.1). `TraceBuilder` serializa únicamente eventos discretos y cambios de estado con checksums criptográficos SHA-256 por tick. El módulo `linea_de_tiempo` procesa el log en una sola pasada $O(T)$ para cómputo de métricas sin duplicación en memoria.
-5. **Visualización y Reportes (`viz/`):** El visor 2D ([viz/viewer.py](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/viz/viewer.py)), el generador de gráficas ([viz/plots.py](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/viz/plots.py)) y el dashboard ([viz/dashboard.py](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/viz/dashboard.py)) consumen exclusivamente el log JSON; no ejecutan simulación ni importan lógica de agentes.
-6. **Validación Automatizada:** Más de 200 pruebas automatizadas con `pytest`:
-   * 105 pruebas unitarias passing de contratos de datos, validadores, cálculo de métricas y exportadores.
+5. **Visualización y Reportes (`viz/`):** El visor 2D ([viz/viewer.py](../viz/viewer.py)), el generador de gráficas ([viz/plots.py](../viz/plots.py)) y el dashboard ([viz/dashboard.py](../viz/dashboard.py)) consumen exclusivamente el log JSON; no ejecutan simulación ni importan lógica de agentes.
+6. **Validación Automatizada:** 230 pruebas automatizadas con `pytest`, todas activas:
+   * Pruebas de Datos: formato del trace, validador, métricas, campo, gráficas y experimentos.
    * 18 casos de prueba parametrizados en `test_config.py` cubriendo todas las restricciones del §3.
    * 12 pruebas unitarias en `test_mundo.py` verificando el layout, serpentina y las reglas físicas R5 a R9 con dobles de prueba aislados.
    * 39 pruebas de integración en `test_integracion.py` evaluando las corridas completas de los tres escenarios contra las 9 reglas físicas e invariantes del sistema.
@@ -116,8 +116,8 @@ La reproducibilidad del proyecto se aseguró en múltiples niveles:
 3. **Script de Ejecución Integral (`scripts/correr_todos.sh`):**
    * En un solo paso orquesta la ejecución de los tres escenarios con la CLI, la verificación criptográfica y estructural de los logs con `tools/validar_trace.py`, la generación de gráficas con `viz/plots.py`, la ejecución de experimentos con `tools/correr_experimento.py` y la compilación del dashboard.
 4. **Pipeline de Integración Continua (CI):**
-   * Implementado en [.github/workflows/ci.yml](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/.github/workflows/ci.yml). Cada `push` o `pull request` en GitHub ejecuta automáticamente las pruebas bajo Python 3.12 en entornos Linux headless con emulación `dummy` de drivers de video.
-5. **Configuraciones Declarativas:** Escenarios y experimentos totalmente parametrizados en archivos JSON externos en [config/](file:///Users/ilannax/Desktop/Class/multiagentic-systems/harvest_sim/config/).
+   * Implementado en [.github/workflows/ci.yml](../.github/workflows/ci.yml). Cada `push` o `pull request` en GitHub ejecuta automáticamente las pruebas bajo Python 3.12 en entornos Linux headless con emulación `dummy` de drivers de video.
+5. **Configuraciones Declarativas:** Escenarios y experimentos totalmente parametrizados en archivos JSON externos en [config/](../config/).
 
 ---
 
@@ -129,7 +129,7 @@ La reproducibilidad del proyecto se aseguró en múltiples niveles:
 ├── docs/
 │   ├── autoevaluacion.md            # Mapeo integral de rúbrica
 │   ├── especificacion_primera_entrega.md # Criterios 1, 2 y 3
-│   ├── ontologia.md                 # Criterio 1 (Ontología CORA/PROV-O)
+│   ├── ontologia.md                 # Criterio 1 (ontología del curso e IEEE)
 │   └── decisiones.md                # Registro de decisiones de diseño
 ├── scripts/
 │   ├── correr_todos.sh              # Criterios 3 y 8 (Pipeline completo)

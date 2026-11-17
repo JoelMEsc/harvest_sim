@@ -134,3 +134,16 @@ Formato por entrada:
 - **Alternativa considerada:** cambiar de estado un tick después de llegar; pasar la tasa solo por constructor; ignorar mensajes que no sean `TRANSFERENCIA_TERMINADA` mientras espera.
 - **Por qué se descartó:** el tick extra no aporta nada y desalinea los traces con el simulador de referencia; `simulacion.py` ya crea el carro sin tasa; ignorar un `LLENA` rompería la regla del carro ocupado.
 - **Afecta a:** Carlos (`Mundo.config` o constructor en `simulacion.py`), Emilio (misma convención de `mundo.config`), Joel (métricas de duración).
+
+## 2026-11-17 — Integración de la entrega: el mundo expone su configuración y se activan todas las pruebas
+- **Estado:** DECIDIDO.
+- **Quién:** Joel (integración, con el acuerdo del equipo de integrar sin revisión de PR)
+- **Decisión:**
+  1. `Mundo` guarda la configuración en `mundo.config`. La cosechadora y el carro leen de ahí `tasa_transferencia` y `tasa_descarga`; sin esto la simulación fallaba en la primera transferencia. Queda en el contrato (§10 de la especificación).
+  2. Se quitan todos los `skip`: las pruebas de mundo, configuración e integración corren contra la simulación real (230 pruebas).
+  3. `scripts/correr_todos.sh` exporta los cuadros del visor antes de armar el dashboard, para que el panel del entorno tenga imágenes.
+  4. El error de obstáculos fuera del mapa dice «fuera del mapa», como espera `test_config.py`.
+  5. El README se reescribe como documento global del proyecto (antes, una rama lo regresaba al del esqueleto y otra lo ampliaba).
+- **Alternativa considerada:** pasar las tasas a los constructores de los agentes desde `simulacion.py`.
+- **Por qué se descartó:** los dos agentes ya estaban escritos y probados leyendo `mundo.config`; exponerla en el mundo es una línea y no cambia sus pruebas.
+- **Afecta a:** Carlos (`mundo.py`), Emilio y Oswaldo (lectura de las tasas), Ilan (pruebas y script), Joel.

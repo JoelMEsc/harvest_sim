@@ -60,7 +60,6 @@ CASOS_INVALIDOS = [
 ]
 
 
-@pytest.mark.skip(reason="pendiente — espera config.py (Carlos)")
 @pytest.mark.parametrize("desc,modificaciones,campo_borrar,patron", CASOS_INVALIDOS)
 def test_config_invalida(tmp_path, desc, modificaciones, campo_borrar, patron):
     """Las validaciones del §3 fallan con mensaje claro: capacidad_carro < capacidad_cosechadora,

@@ -19,6 +19,7 @@ class Mundo:
     bodega: Celda = (0, 0)
 
     def __init__(self, config: Config) -> None:
+        self.config = config  # los agentes leen las tasas de aquí (tasa_transferencia, tasa_descarga)
         self.ancho = config.ancho
         self.alto = config.alto
         self.grano_por_celda = config.grano_por_celda

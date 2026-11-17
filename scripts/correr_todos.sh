@@ -76,8 +76,11 @@ else
     python tools/correr_experimento.py config/experimentos/tasa_transferencia.json
 fi
 
-echo "==> [5/5] Construyendo dashboard..."
+echo "==> [5/5] Exportando cuadros del visor y construyendo dashboard..."
 if [[ -f viz/dashboard.py ]]; then
+    for i in "${!TRACES[@]}"; do
+        python viz/viewer.py "${TRACES[$i]}" --guardar-cuadros "${ESCENARIOS_DASHBOARD[$i]}/cuadros"
+    done
     python viz/dashboard.py "${ESCENARIOS_DASHBOARD[@]}" --salida runs/dashboard.html
     echo "Dashboard generado en: runs/dashboard.html"
 else

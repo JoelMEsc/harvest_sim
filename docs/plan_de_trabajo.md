@@ -2,6 +2,8 @@
 
 Reparto, dependencias, cronograma y flujo de git. **El detalle de cada persona está en su guía, en [`docs/equipo/`](equipo/README.md)**: qué archivos escribe, qué debe hacer cada función, qué pruebas deben pasar y cuándo está listo. La [especificación](especificacion_primera_entrega.md) dice **qué** se construye; este plan dice **quién**, **en qué orden** y **cómo se junta**.
 
+> **Integrado el 17 de noviembre:** las seis partes están en `development` y `main`; los tres escenarios corren completos y las 230 pruebas pasan. Solo falta el PDF (Joel).
+>
 > **Actualizado el 16 de noviembre.** La entrega se movió al martes 17 antes de la clase, con la rúbrica nueva del anuncio de Canvas (PDF en `reto/`). La parte de Datos está terminada; el resto del código está por hacer. El formato del log es el **trace 2.1** y el contrato está en [`docs/equipo/README.md`](equipo/README.md) §3.
 
 ---
@@ -10,12 +12,12 @@ Reparto, dependencias, cronograma y flujo de git. **El detalle de cada persona e
 
 | Persona | Rama | Archivos que le pertenecen | Estado | Guía |
 |---|---|---|---|---|
-| **Carlos** (Mundo) | `branch-carlos` | `config.py`, `mundo.py`, `simulacion.py`, `config/escenario_*.json` | Por hacer | [carlos/guia.md](equipo/carlos/guia.md) |
-| **Oswaldo** (Rutas y carro) | `branch-oswaldo` | `rutas.py`, `carro.py`, `tests/test_rutas.py`, `tests/test_carro.py` | Por hacer | [oswaldo/guia.md](equipo/oswaldo/guia.md) |
-| **Emilio** (Mensajes y cosechadora) | `branch-emilio` | `mensajes.py`, `cosechadora.py`, `tests/test_mensajes.py`, `tests/test_cosechadora.py` | Por hacer | [emilio/guia.md](equipo/emilio/guia.md) |
+| **Carlos** (Mundo) | `branch-carlos` | `config.py`, `mundo.py`, `simulacion.py`, `config/escenario_*.json` | Hecho e integrado | [carlos/guia.md](equipo/carlos/guia.md) |
+| **Oswaldo** (Rutas y carro) | `branch-oswaldo-rutas` | `rutas.py`, `carro.py`, `tests/test_rutas.py`, `tests/test_carro.py` | Hecho e integrado | [oswaldo/guia.md](equipo/oswaldo/guia.md) |
+| **Emilio** (Mensajes y cosechadora) | `branch-emilio` | `mensajes.py`, `cosechadora.py`, `tests/test_mensajes.py`, `tests/test_cosechadora.py` | Hecho e integrado | [emilio/guia.md](equipo/emilio/guia.md) |
 | **Joel** (Datos) | `branch-joel` | `src/harvest_sim/datos/`, `telemetria.py` (fachada), `viz/plots.py`, `tools/`, `config/experimentos/`, `tests/fixtures/` y las pruebas de Datos | **Hecho**, salvo las corridas reales | [joel/estado.md](equipo/joel/estado.md) |
-| **Giovanni** (Interfaz) | `branch-giovanni` | `viz/viewer.py`, `viz/dashboard.py`, `cli.py`, `tests/test_viewer.py`, `tests/test_dashboard.py` | Por hacer | [giovanni/guia.md](equipo/giovanni/guia.md) |
-| **Ilan** (Calidad) | `branch-ilan` | `tests/test_mundo.py`, `tests/test_config.py`, `tests/test_integracion.py`, `.github/`, `scripts/`, `README.md`, `docs/autoevaluacion.md` | Por hacer | [ilan/guia.md](equipo/ilan/guia.md) |
+| **Mario Giovanni** (Interfaz) | `mario_branch` | `viz/viewer.py`, `viz/dashboard.py`, `cli.py`, `tests/test_viewer.py`, `tests/test_dashboard.py` | Hecho e integrado | [giovanni/guia.md](equipo/giovanni/guia.md) |
+| **Ilan** (Calidad) | `branch-ilan` | `tests/test_mundo.py`, `tests/test_config.py`, `tests/test_integracion.py`, `.github/`, `scripts/`, `README.md`, `docs/autoevaluacion.md` | Hecho e integrado | [ilan/guia.md](equipo/ilan/guia.md) |
 
 **Regla de oro:** cada archivo tiene un solo dueño. Si necesitas un cambio en un archivo ajeno, se lo pides al dueño; no lo editas tú.
 
