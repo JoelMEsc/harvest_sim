@@ -122,3 +122,15 @@ Formato por entrada:
 - **Alternativa considerada:** dejar que `bfs` entre a un destino bloqueado; excluir `evitar` aunque las demás vecinas sean inalcanzables; confiar en que la ruta siempre esté al día.
 - **Por qué se descartó:** entrar a un destino ocupado rompería R3; excluir la única vecina alcanzable dejaría al carro sin objetivo; una ruta vieja haría que el agente «saltara» (R2).
 - **Afecta a:** Carlos (`Mundo.ruta_bfs`), Emilio (cosechadora), Oswaldo (carro).
+
+## 2026-11-17 — Carro: tiempos, tasa de descarga y mensajes apartados
+- **Estado:** DECIDIDO.
+- **Quién:** Oswaldo (Carro)
+- **Decisión:**
+  1. En los estados de viaje, el carro da su paso y, si con ese paso llegó, cambia de estado en el mismo tick (`ESPERANDO_TRANSFERENCIA`, `DESCARGANDO` o `EN_BASE`), igual que el simulador de referencia (`tools/generar_trace_ejemplo.py`). Las transiciones que salen de `EN_BASE`, `ESPERANDO_TRANSFERENCIA` y `DESCARGANDO` no incluyen movimiento.
+  2. `Carro(agent_id, capacidad, tasa_descarga=None)`: si no se pasa la tasa, se lee de `mundo.config.tasa_descarga` al entrar a `DESCARGANDO` (la cosechadora lee `mundo.config.tasa_transferencia`). **Requiere** que `Mundo` guarde `self.config = config`, o que `simulacion` pase las tasas al crear los agentes.
+  3. Si en `ESPERANDO_TRANSFERENCIA` sale un `LLENA` de la fila (el buzón no permite ver sin sacar), el carro lo aparta y lo atiende primero al volver a `EN_BASE`; nunca se descarta.
+  4. `carro.duracion_descarga` usa la misma fórmula que `mundo.duracion_ticks` (§4.3), porque en `development` esa función aún es esqueleto; se puede sustituir cuando llegue `mundo.py`.
+- **Alternativa considerada:** cambiar de estado un tick después de llegar; pasar la tasa solo por constructor; ignorar mensajes que no sean `TRANSFERENCIA_TERMINADA` mientras espera.
+- **Por qué se descartó:** el tick extra no aporta nada y desalinea los traces con el simulador de referencia; `simulacion.py` ya crea el carro sin tasa; ignorar un `LLENA` rompería la regla del carro ocupado.
+- **Afecta a:** Carlos (`Mundo.config` o constructor en `simulacion.py`), Emilio (misma convención de `mundo.config`), Joel (métricas de duración).
