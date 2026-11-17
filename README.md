@@ -3,7 +3,7 @@
 Reto agrícola multiagente · Equipo 3 · TC2008B.
 Simulación 2D en Python de **una cosechadora y un carro recolector**. Es la línea base contra la que se compararán las mejoras de coordinación. Python genera un log JSON (`trace.json`); el visor, las métricas, las gráficas y los experimentos solo leen ese archivo.
 
-> **Estado (16 de noviembre):** la parte de Datos (log, métricas, gráficas, validador y experimentos) está terminada y probada. La simulación, el visor y la CLI están por implementar.
+> **Estado (17 de noviembre):** la parte de Datos, CI (.github/workflows/ci.yml), scripts de automatización y suites completas de pruebas (configuración, mundo e integración) están implementadas. Los módulos de la simulación y agentes se encuentran en fase final de integración.
 > **Entrega: martes 17 de noviembre, antes de la clase.** Cada persona tiene su guía paso a paso en [`docs/equipo/`](docs/equipo/README.md): **empieza por ahí**. La referencia de qué construir es [`docs/especificacion_primera_entrega.md`](docs/especificacion_primera_entrega.md).
 
 ## Instalación
@@ -21,19 +21,44 @@ Los scripts de `tools/` y `viz/` también corren sin `pip install -e .` (agregan
 
 ## Uso
 
+### Ejecución integral de todos los escenarios
+
+La forma más rápida de ejecutar la simulación completa, validar los logs, generar gráficas, tabla resumen y experimentos es mediante el script:
+
 ```bash
-# Correr un escenario (genera runs/<escenario>/trace.json y gráficas)      [por implementar]
+bash scripts/correr_todos.sh
+```
+
+*(Para probar todo el pipeline con datos de ejemplo antes de la integración final de la CLI, se puede utilizar `bash scripts/correr_todos.sh --ejemplo`).*
+
+### Ejecución paso a paso
+
+```bash
+# Correr un escenario (genera runs/<escenario>/trace.json y gráficas)
 python -m harvest_sim.cli config/escenario_a.json
 
-# Visor 2D, a partir del log                                                [por implementar]
+# Visor 2D, a partir del log
 python viz/viewer.py runs/escenario_a/trace.json
 
-# Pruebas
+# Dashboard interactivo en HTML (junta entorno, indicadores y experimentos)
+python viz/dashboard.py runs/escenario_a runs/escenario_b runs/escenario_c --salida runs/dashboard.html
+
+# Pruebas automatizadas
 pytest
 pytest tests/test_mundo.py::test_serpentina_cubre_todo_el_campo   # un solo test
 ```
 
 La simulación es determinista a propósito: no hay aleatoriedad en esta entrega.
+
+## Verificación en un entorno limpio
+
+Para comprobar que el proyecto se instala y ejecuta correctamente desde cero en una máquina limpia (criterio 8 de reproducibilidad):
+
+```bash
+bash scripts/verificar_instalacion.sh
+```
+
+Este script crea automáticamente un entorno virtual en una carpeta temporal, instala dependencias desde `requirements.txt`, ejecuta `pytest` y corre `scripts/correr_todos.sh`, limpiando los archivos temporales al terminar.
 
 ## Datos: log, métricas, gráficas y experimentos (ya funciona)
 
@@ -141,7 +166,7 @@ Cada archivo tiene un solo dueño. Tareas, dependencias y cronograma: [`docs/pla
 | Emilio | `branch-emilio` | `mensajes.py`, `cosechadora.py`, `tests/test_mensajes.py`, `tests/test_cosechadora.py` |
 | Joel | `branch-joel` | `src/harvest_sim/datos/`, `telemetria.py`, `viz/plots.py`, `tools/`, `config/experimentos/`, `tests/fixtures/` y las pruebas de Datos; arma el PDF de la entrega |
 | Giovanni | `branch-giovanni` | `viz/viewer.py`, `viz/dashboard.py`, `cli.py`, `tests/test_viewer.py`, `tests/test_dashboard.py` |
-| Ilan | `branch-ilan` | `tests/test_mundo.py`, `tests/test_config.py`, `tests/test_integracion.py`, `.github/`, `scripts/`, `README.md` |
+| Ilan | `branch-ilan` | `tests/test_mundo.py`, `tests/test_config.py`, `tests/test_integracion.py`, `.github/`, `scripts/`, `README.md`, `docs/autoevaluacion.md` |
 
 Cada archivo tiene en su docstring la sección de la especificación que implementa. Los tests pendientes están marcados con `skip`: quita el decorador al implementar cada uno.
 
