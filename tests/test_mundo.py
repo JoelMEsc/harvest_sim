@@ -9,7 +9,6 @@ import pytest
 
 pendiente = pytest.mark.skip(reason="pendiente — espera mundo.py (Carlos)")
 
-
 class DummyAgente:
     """Doble de prueba para aislar el Mundo de la implementación de los agentes."""
     def __init__(self, agent_id: str, capacidad: int = 20, carga: int = 0, estado: str = "EN_BASE"):
@@ -18,7 +17,6 @@ class DummyAgente:
         self.carga = carga
         self.estado = estado
         self.posicion = (0, 0)
-
 
 def crear_config(
     ancho: int = 8,
@@ -104,8 +102,6 @@ def test_serpentina_cubre_todo_el_campo():
     assert set(camino) == celdas_esperadas, "Debe visitar todas las celdas con y >= 1"
     assert len(camino) == len(celdas_esperadas), "No debe haber celdas repetidas en el camino"
 
-
-@pendiente
 def test_serpentina_alterna_direccion():
     """Fila 1 de izquierda a derecha, fila 2 de derecha a izquierda, etc."""
     from harvest_sim.mundo import Mundo
@@ -122,8 +118,6 @@ def test_serpentina_alterna_direccion():
         else:           # Fila par (2, 4, ...): derecha a izquierda
             assert tramo_fila == [(x, y) for x in range(ancho - 1, -1, -1)]
 
-
-@pendiente
 def test_transferencia_solo_entre_vecinos():
     """R5: transferir con agentes no vecinos falla."""
     from harvest_sim.mundo import Mundo
@@ -146,8 +140,6 @@ def test_transferencia_solo_entre_vecinos():
     with pytest.raises(ValueError, match="vecinos"):
         mundo.transferir("cosechadora_1", "carro_1", 5)
 
-
-@pendiente
 def test_transferencia_respeta_capacidad():
     """R6: δ = min(q_cosechadora, Q_carro - q_carro); incluir caso con capacidad libre < carga."""
     from harvest_sim.mundo import Mundo
@@ -178,8 +170,6 @@ def test_transferencia_respeta_capacidad():
     assert cosechadora.carga == 5
     assert carro.carga == 10
 
-
-@pendiente
 def test_celda_cosechada_una_vez():
     """R8: cosechar dos veces la misma celda no produce grano la segunda vez (o falla)."""
     from harvest_sim.mundo import Mundo
@@ -201,8 +191,6 @@ def test_celda_cosechada_una_vez():
     with pytest.raises(ValueError, match="cosechada"):
         mundo.cosechar("cosechadora_1", celda)
 
-
-@pendiente
 def test_cosechadora_no_entra_a_bodega():
     """R9: bloqueadas_fijas de una cosechadora incluye (0,0); la del carro no."""
     from harvest_sim.mundo import Mundo
@@ -217,8 +205,6 @@ def test_cosechadora_no_entra_a_bodega():
     assert (0, 0) in mundo.bloqueadas_fijas("cosechadora_1")
     assert (0, 0) not in mundo.bloqueadas_fijas("carro_1")
 
-
-@pendiente
 def test_deposito_actualiza_entregado():
     """depositar() mueve la carga del carro a `entregado` y deja su carga en 0."""
     from harvest_sim.mundo import Mundo
@@ -242,8 +228,6 @@ def test_deposito_actualiza_entregado():
     assert carro.carga == 0
     assert mundo.entregado == 15
 
-
-@pendiente
 def test_duracion_ticks():
     """ceil(cantidad / tasa), mínimo 1: (10,2)->5, (3,2)->2, (1,4)->1."""
     from harvest_sim.mundo import duracion_ticks
@@ -253,8 +237,6 @@ def test_duracion_ticks():
     assert duracion_ticks(1, 4) == 1
     assert duracion_ticks(0, 2) == 1  # Duración mínima de 1 tick
 
-
-@pendiente
 def test_cosechar_registra_cambio():
     """cosechar agrega {tipo: CELDA_COSECHADA, celda, agente}; depositar agrega
     {tipo: DEPOSITO, agente, cantidad, entregado_total}; drenar_eventos vacía la lista."""
@@ -286,8 +268,6 @@ def test_cosechar_registra_cambio():
     # 4. Segunda llamada a drenar_eventos debe devolver lista vacía
     assert mundo.drenar_eventos() == []
 
-
-@pendiente
 def test_registrar_bloqueo():
     """registrar_bloqueo registra {tipo: BLOQUEO, agente: id} y drenar_eventos lo vacía."""
     from harvest_sim.mundo import Mundo
@@ -302,8 +282,6 @@ def test_registrar_bloqueo():
     assert eventos == [{"tipo": "BLOQUEO", "agente": "carro_1"}]
     assert mundo.drenar_eventos() == []
 
-
-@pendiente
 def test_descripcion_del_mundo():
     """descripcion() trae ancho, alto, bodega, bases (con listas, no tuplas), grano_por_celda y obstaculos."""
     from harvest_sim.mundo import Mundo

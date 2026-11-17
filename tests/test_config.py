@@ -12,14 +12,12 @@ CAMPOS = {
     "tasa_transferencia", "tasa_descarga", "max_ticks", "obstaculos",
 }
 
-
 @pytest.mark.parametrize("nombre", ["escenario_a", "escenario_b", "escenario_c"])
 def test_escenarios_tienen_todos_los_campos(nombre):
     """Humo: los JSON de escenario existen y traen exactamente los campos del §3."""
     datos = json.loads((CONFIG_DIR / f"{nombre}.json").read_text(encoding="utf-8"))
     assert set(datos) in (CAMPOS, CAMPOS - {"obstaculos"})
     assert datos["nombre"] == nombre
-
 
 CONFIG_BASE = {
     "nombre": "escenario_test",
@@ -59,8 +57,6 @@ CASOS_INVALIDOS = [
     ("campo desconocido", {"extra_parametro": 123}, None, r"desconocido"),
 ]
 
-
-@pytest.mark.skip(reason="pendiente — espera config.py (Carlos)")
 @pytest.mark.parametrize("desc,modificaciones,campo_borrar,patron", CASOS_INVALIDOS)
 def test_config_invalida(tmp_path, desc, modificaciones, campo_borrar, patron):
     """Las validaciones del §3 fallan con mensaje claro: capacidad_carro < capacidad_cosechadora,
