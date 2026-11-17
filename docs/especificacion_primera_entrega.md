@@ -520,6 +520,7 @@ class Buzon:
     def drenar_eventos(self) -> list[dict]: ...                     # eventos del tick para el log; vacía la lista
 
 class Mundo:
+    config: Config                                                   # los agentes leen aquí tasa_transferencia y tasa_descarga
     bodega: tuple[int, int]                                          # (0, 0)
     grano_total: int                                                 # = datos.campo.grano_esperado(descripcion())
     def base_de(self, agent_id: str) -> tuple[int, int]: ...
