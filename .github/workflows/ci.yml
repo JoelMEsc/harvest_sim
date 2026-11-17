@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - development
+      - "branch-*"
+  pull_request:
+    branches:
+      - main
+      - development
+
+jobs:
+  test:
+    name: Pruebas automatizadas (Python 3.12)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Ejecutar suite de pruebas
+        env:
+          SDL_VIDEODRIVER: dummy
+          MPLBACKEND: Agg
+        run: |
+          pytest -q
