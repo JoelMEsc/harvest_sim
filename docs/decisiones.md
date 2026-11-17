@@ -111,3 +111,14 @@ Formato por entrada:
 - **Alternativa considerada:** conservar las 5 gráficas y los 8 paneles anteriores; correr los experimentos a mano.
 - **Por qué se descartó:** había pares de gráficas y paneles con la misma información; la rúbrica nueva pide variar parámetros, repetir corridas y recomienda mapas de calor.
 - **Afecta a:** Joel; Giovanni (el dashboard usa estas imágenes); Ilan (`scripts/correr_todos.sh`).
+
+## 2026-11-17 — Rutas: casos de borde no especificados
+- **Estado:** DECIDIDO.
+- **Quién:** Oswaldo (Rutas)
+- **Decisión:**
+  1. `bfs` devuelve `None` si el destino está en `bloqueadas` (por ejemplo, ocupado por otro agente): el agente espera en vez de intentar entrar.
+  2. `elegir_celda_objetivo` mide las distancias con la celda de la cosechadora (`objetivo`) como bloqueada, y entiende «salvo que sea la única opción» como «la única **alcanzable**»: si ninguna vecina fuera de `evitar` tiene ruta, usa la mejor de `evitar`.
+  3. `siguiente_paso` recalcula con BFS si la ruta viene vacía o si su primera celda ya no es vecina de `pos` (ruta vieja); si `pos == destino` devuelve `(None, [])`, que no es un bloqueo (el agente debe revisar si llegó antes de pedir el paso). Nunca modifica la lista `ruta` que recibe.
+- **Alternativa considerada:** dejar que `bfs` entre a un destino bloqueado; excluir `evitar` aunque las demás vecinas sean inalcanzables; confiar en que la ruta siempre esté al día.
+- **Por qué se descartó:** entrar a un destino ocupado rompería R3; excluir la única vecina alcanzable dejaría al carro sin objetivo; una ruta vieja haría que el agente «saltara» (R2).
+- **Afecta a:** Carlos (`Mundo.ruta_bfs`), Emilio (cosechadora), Oswaldo (carro).
