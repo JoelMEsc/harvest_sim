@@ -1,105 +1,93 @@
-# Guía de Giovanni — Interfaz (visor, CLI y dashboard)
+# Guía de Mario Giovanni — Interfaz (segunda entrega)
 
-**Tu parte en una frase:** el visor 2D que reproduce un `trace.json`, la línea de comandos que corre una simulación de principio a fin, y el **dashboard** que pide la rúbrica.
+**Tu parte en una frase:** Unity reproduce la coordinación multiagente pidiendo los traces al servidor FastAPI, y el visor, la CLI y el dashboard de Python muestran lo nuevo (varios agentes, obstáculos, subasta, combustible y estrategias).
 
-**Por qué importa:** el dashboard es **obligatorio** en la rúbrica nueva (criterio 6, 10 puntos) y es lo primero que verá el profesor. El visor y la CLI son la cara del proyecto.
+**Por qué importa:** es lo que se ve en la demo y el video, y la base de la integración 3D/WebGL de la entrega final. Python sigue siendo la única fuente de verdad: Unity solo reproduce.
 
-**Fecha límite:** martes 17, antes de la clase. **No esperas a nadie para empezar:** el visor y el dashboard funcionan desde ya con los datos de ejemplo.
+**Archivos tuyos:** en `harvest-simu-visualization` (tu repo de Unity) todo; en `harvest_sim`: `viz/viewer.py`, `viz/dashboard.py`, `src/harvest_sim/cli.py`, `tests/test_viewer.py`, `tests/test_dashboard.py`.
 
-**Archivos tuyos:** `viz/viewer.py`, `viz/dashboard.py` (nuevo), `src/harvest_sim/cli.py`, `tests/test_viewer.py`, `tests/test_dashboard.py` (nuevo).
-
-**Lee antes:** [README del equipo](../README.md) §3 y §5; especificación §6.3 y §7.1; el PDF de Canvas en `reto/` (sección del dashboard).
+**Lee antes:** [README del equipo](../README.md); especificación de la segunda entrega §7 (mensajes), §12 (trace 2.2) y §14 (servidor).
 
 ---
 
-## Tareas (en orden)
+## Tareas en Unity (`harvest-simu-visualization`)
 
-### 1. Visor (`viz/viewer.py`) — 2 h
+### 1. Leer el trace 2.2 ⚡
 
-- **No importa nada de `harvest_sim`**: solo `json` y `pygame` (así el mismo log servirá para Unity).
-- Datos de prueba: `tests/fixtures/trace_ejemplo.json` y `python tools/generar_trace_ejemplo.py --escenarios` (3 traces en `runs/ejemplo/`).
-- Cómo reconstruir el estado (todo lo que necesitas; no deduzcas nada de las posiciones):
-  ```python
-  traza = json.load(open(ruta, encoding="utf-8"))
-  mundo = traza["mundo"]; total = traza["meta"]["total_ticks"]
-  cambios_por_tick = {t["tick"]: t["cambios"] for t in traza["ticks"]}
-  agentes = {}; cosechadas = set(); entregado = 0
-  def avanzar_a(tick):                      # aplica los cambios de ese tick
-      global entregado
-      for e in cambios_por_tick.get(tick, []):
-          if e["tipo"] == "AGENTE": agentes.setdefault(e["id"], {}).update(e["set"])
-          elif e["tipo"] == "CELDA_COSECHADA": cosechadas.add(tuple(e["celda"]))
-          elif e["tipo"] == "DEPOSITO": entregado = e["entregado_total"]
-  ```
-  Para retroceder, vuelve a empezar desde el tick 0 (son pocos ticks) o guarda una copia del estado cada cierto número de ticks.
-- Debe mostrar (§7.1): grid; celdas cosechadas y por cosechar en colores distintos; bodega, bases y **obstáculos** (`mundo["obstaculos"]`, hoy vacío) marcados distinto; agentes con su orientación; barra de carga (`carga` / `capacidad` del catálogo `traza["agentes"]`); estado en texto; tick; estela de los últimos ticks; mensajes del tick (`MENSAJE_ENVIADO`) como texto. Controles: pausa y reanudar, paso a paso, velocidad.
-- Opción `--guardar-cuadros carpeta/` que guarde un PNG cada N ticks (lo usa el dashboard para el panel del entorno).
-- **Listo cuando:** reproduce los 3 traces de ejemplo de principio a fin, y `tests/test_viewer.py` (con `SDL_VIDEODRIVER=dummy`, dibuja varios ticks del fixture sin error) pasa sin `skip`.
+- `TraceLoader`: acepta `schema_version` `"2.1"` y `"2.2"`.
+- Campos nuevos: `AGENTE.set.combustible`, `CELDA_COSECHADA.cantidad`, `mundo.rendimiento` (opcional), eventos `RECARGA` y `RESTRICCION`, los 7 tipos de mensaje y `entrega_en` mayor que t + 1.
+- Actualiza `expected_states.json` y las pruebas con los traces nuevos (Joel te da `tools/exportar_traces_unity.py`, que copia traces ya validados a `Assets/Data/Traces/`).
+- **Listo cuando:** las pruebas de datos pasan con los traces de D, E y F.
 
-### 2. CLI (`src/harvest_sim/cli.py`) — 1 h
+### 2. Varios agentes, obstáculos y combustible
 
-```python
-config = cargar_config(args.config)
-trace = ejecutar(config)                                   # Carlos
-escribir_trace(trace, Path(args.salida) / config.nombre / "trace.json")   # from harvest_sim.datos import escribir_trace
-if not args.sin_plots:
-    subprocess.run([sys.executable, "viz/plots.py", ruta_trace], check=True)   # o importa viz/plots.py con importlib
-```
+- Agentes desde el catálogo (sin ids fijos): color por tipo y un tono distinto por id; etiqueta con el id.
+- Obstáculos como cubos grises (ya están en el mundo del trace).
+- Barra de combustible por agente en el HUD; marca visual en el tick de una `RECARGA`.
+- Celdas con más grano (rendimiento) un poco más oscuras, si `mundo.rendimiento` existe.
 
-- Logging: `INFO` por defecto, `--silencioso` → `WARNING`, `--detallado` → `DEBUG`, formato `%(message)s` (sin fecha ni hora, §6.3).
-- Código de salida distinto de 0 si algo falla (configuración inválida, `max_ticks`, etc.), con el mensaje en `stderr`.
-- Mientras no exista `ejecutar`, pruébala con un `ejecutar` falso que devuelva el fixture.
-- **Listo cuando:** `python -m harvest_sim.cli config/escenario_a.json` genera `runs/escenario_a/trace.json` y sus gráficas en `runs/escenario_a/plots/`.
+### 3. Que se vea la coordinación
 
-### 3. Dashboard (`viz/dashboard.py`) — 2 h 30 min — **obligatorio**
+- **Subasta:** al enviarse `SOLICITUD_SERVICIO`, líneas de la cosechadora a cada carro; `PROPUESTA` con su costo como texto sobre el carro; la línea del ganador (`ACEPTACION`) se queda hasta la `TRANSFERENCIA_TERMINADA`.
+- **Restricciones:** el agente parpadea o muestra un icono con el nombre de la regla del evento `RESTRICCION`.
+- **Panel de eventos:** mensajes con su performativa (`cfp`, `propose`, `accept-proposal`…).
 
-Una página HTML estática (solo biblioteca estándar: arma el HTML con texto) que se abre en el navegador: `python viz/dashboard.py runs/escenario_a runs/escenario_b runs/escenario_c --salida runs/dashboard.html`. Lee solo archivos ya generados (trace, gráficas, tabla); no corre la simulación. Tres paneles, como pide la rúbrica:
+### 4. Movimiento y cámara 3D
 
-| Panel | Qué lleva | De dónde sale |
-|---|---|---|
-| **Entorno** | Cuadros del visor (o una animación) de cada escenario: grid, agentes, celdas cosechadas | `viewer.py --guardar-cuadros` |
-| **Indicadores** | Por escenario: tarjetas con tiempo de completación, tiempo ocioso, % ocioso, distancia media cosechadora–carro, utilización del carro, bloqueos; y la línea de tiempo de estados, el ocio acumulado y el flujo del grano | `trace["metricas"]` y `runs/<escenario>/plots/1_…` a `4_…` |
-| **Experimental** | Tabla de **parámetros de cada escenario** (ancho × alto, capacidades, tasas: lo pide la rúbrica), la comparación entre escenarios, la tabla resumen, los mapas de calor y la gráfica de sensibilidad | `trace["config"]`, `runs/comparacion/`, `runs/<escenario>/plots/5_…` y `6_…`, `runs/experimentos/<nombre>/` |
+- Interpolación entre celdas (lerp de posición y giro dentro del tick); los datos lógicos siguen cambiando solo al cambiar de tick.
+- Cámara en perspectiva con órbita y zoom (y un botón para volver a la cenital).
 
-- Títulos, unidades y una frase por gráfica que diga qué pregunta responde (están en el docstring de `viz/plots.py`).
-- Las imágenes se referencian con rutas relativas o se incrustan en base64 (así la página funciona sola).
-- Prueba de humo `tests/test_dashboard.py`: genera el dashboard con los traces de ejemplo en `tmp_path` y comprueba que el HTML tiene los tres paneles y los nombres de los escenarios.
-- **Listo cuando:** con los 3 escenarios reales, `runs/dashboard.html` se abre y muestra los tres paneles; tomas capturas para el PDF.
+### 5. Cliente del servidor FastAPI
 
-### 4. PDF: sección 6 «Dashboard» — 30 min (martes)
+- `TraceClient` con `UnityWebRequest` (corrutina o `async`): `GET /api/salud`, `GET /api/escenarios`, `GET /api/escenarios/{nombre}/trace?seed=&estrategia=` (especificación §14). URL base configurable en el Inspector (por defecto `http://127.0.0.1:8000`).
+- HUD: selector de escenario, estrategia y seed, botón «Simular». Al recibir el trace, se carga como hoy; si el servidor no responde, muestra el error y carga el trace local.
+- **Listo cuando:** con `uvicorn harvest_sim.servidor:app` corriendo, eliges E / `anticipada` / seed 3, y Unity reproduce ese trace.
 
-Capturas de los tres paneles y una explicación breve de cada uno.
+### 6. README del repo de Unity
+
+Cómo levantar el servidor y conectar, versiones, y qué queda para WebGL en la entrega final.
+
+## Tareas en `harvest_sim`
+
+### 7. CLI
+
+`--seed N` y `--estrategia {base, subasta, anticipada, anticipada_plus}` sobrescriben la configuración (los valores de cada estrategia están en el README del equipo §3.1; Joel expone un diccionario `ESTRATEGIAS` en `datos/experimentos.py` que puedes importar).
+
+### 8. Visor pygame y dashboard
+
+- Visor: varios agentes con color por id, obstáculos, barra de combustible, mensajes de la subasta en el panel lateral.
+- Dashboard: panel experimental nuevo con la comparación por estrategia (gráficas con IC 95 % que genera Joel) y la tabla de J por término; parámetros de los escenarios nuevos.
+
+### 9. Video y PDF
+
+Grabaciones de Unity y del visor para el video (Ilan lo edita) y la sección de visualización del PDF (para Joel).
 
 ---
-
-## Contrato con Datos
-
-- El trace es el del [README del equipo](../README.md) §3 (versión 2.1). Si te falta un dato, se agrega al log (pídeselo a Joel); el visor no lo calcula.
-- Las gráficas y la tabla se generan con `python viz/plots.py runs/escenario_*/trace.json` (Joel). Nombres: `1_linea_de_tiempo_estados.png`, `2_ocioso_acumulado.png`, `3_distancia_cosechadora_carro.png`, `4_flujo_del_grano.png`, `5_mapa_espera.png`, `6_mapa_trafico.png` y `runs/comparacion/comparacion_escenarios.png`, `resumen.csv`, `resumen.md`.
 
 ## Dependencias
 
-- **Dependes de:** nadie para el visor y el dashboard (datos de ejemplo); de Carlos (`ejecutar`) para la CLI real.
-- **Dependen de ti:** el PDF (panel del dashboard) y la reproducibilidad (la CLI la usa `scripts/correr_todos.sh` de Ilan).
+- **Dependes de:** Joel (formato 2.2, servidor y traces exportados). Para avanzar desde ya: Joel genera traces 2.2 de ejemplo y el servidor responde con traces de prueba antes de que esté la simulación completa.
+- **Dependen de ti:** la demo y el video.
 
 ## Cómo probar
 
 ```bash
-python tools/generar_trace_ejemplo.py --escenarios && python viz/plots.py runs/ejemplo/*/trace.json
-python viz/viewer.py runs/ejemplo/ejemplo_a/trace.json
-python viz/dashboard.py runs/ejemplo/ejemplo_a runs/ejemplo/ejemplo_b runs/ejemplo/ejemplo_c --salida runs/dashboard.html
+uvicorn harvest_sim.servidor:app --reload          # en harvest_sim
+curl http://127.0.0.1:8000/api/salud
 SDL_VIDEODRIVER=dummy pytest tests/test_viewer.py tests/test_dashboard.py -q
 ```
 
+En Unity: Test Runner (EditMode y PlayMode) y reproducir D, E y F desde el servidor.
+
 ## Definición de listo
 
-- [ ] El visor no importa `harvest_sim` y reproduce cualquier trace 2.1.
-- [ ] La CLI corre un escenario completo y devuelve un código distinto de 0 si falla.
-- [ ] El dashboard tiene los tres paneles y la tabla de parámetros por escenario.
-- [ ] Pruebas del visor y del dashboard sin `skip`.
+- [ ] Unity lee 2.2, muestra N agentes, obstáculos, combustible, subasta y restricciones.
+- [ ] Unity pide traces al servidor y los reproduce; si falla, error visible y trace local.
+- [ ] Interpolación y cámara 3D.
+- [ ] CLI con `--seed` y `--estrategia`; visor y dashboard actualizados.
 
 ## Errores comunes
 
-- Deducir qué celdas se cosecharon a partir de la posición de la cosechadora (hay que usar `CELDA_COSECHADA`).
-- Suponer que todos los ticks están en el archivo: solo están los que tienen cambios; entre uno y otro el estado se mantiene.
-- Rutas absolutas en el HTML del dashboard (no funcionan en otra máquina).
+- Decidir algo en Unity (por ejemplo, inferir el ganador de la subasta): se toma del evento `ACEPTACION`.
+- Bloquear el hilo principal con la petición HTTP.
+- Cambiar cargas o cosecha durante la interpolación (solo cambian al cambiar de tick).
