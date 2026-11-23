@@ -63,6 +63,28 @@ def test_metricas_unidades_y_valores_cero(dashboard, tmp_path):
     assert "No disponible" not in html
 
 
+def test_trace_22_muestra_parametros_y_comparacion_de_estrategias(dashboard, monkeypatch, tmp_path):
+    monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+    viewer = cargar_script("viz/viewer.py")
+    trace = trace_de_prueba()
+    trace["schema_version"] = "2.2"
+    trace["config"].update({"seed": 3, "politica": {"asignacion": "subasta", "umbral_aviso": .7},
+                            "combustible": {"tanque_cosechadora": 80, "tanque_carro": 60}})
+    trace["mundo"]["obstaculos"] = [[3, 2]]
+    carpeta = preparar(tmp_path, trace)
+    png = viewer.guardar_cuadros(viewer.Reproductor(trace), carpeta / "cuadros", 20)[0].read_bytes()
+    viewer.pygame.quit()
+    estrategias = tmp_path / "experimentos" / "estrategias"
+    estrategias.mkdir(parents=True)
+    (estrategias / "comparacion_estrategias.png").write_bytes(png)
+    (estrategias / "costo_j_por_termino.csv").write_text("estrategia,tiempo,ocio\nsubasta,20,3\n")
+    html = dashboard.generar_dashboard([carpeta], tmp_path / "dashboard.html").read_text()
+    assert "trace 2.2" in html and "Comparación por estrategia" in html
+    assert "subasta" in html and "0.7" in html and "80" in html and "60" in html
+    assert "costo j por termino" in html and "estrategia" in html
+    assert len(InspeccionHTML(html).imagenes) == 3
+
+
 def test_imagenes_portables_tablas_y_escape_de_html(dashboard, monkeypatch, tmp_path):
     monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
     viewer = cargar_script("viz/viewer.py")
