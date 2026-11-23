@@ -49,6 +49,8 @@ def test_tres_paneles_y_escenarios_del_equipo(dashboard, tmp_path):
     assert all(nombre in html for nombre in ("ejemplo_a", "ejemplo_b", "ejemplo_c"))
     assert "Datos de ejemplo" in html and "Parámetros por escenario" in html
     assert "No disponible" in html and "Sin cuadros" in html
+    assert "Sin gráficas de comparación por estrategia" in html
+    assert "Sin tablas de resultados por estrategia o costo J" in html
     assert "4 × 3" in html and "5 × 3" in html
 
 
@@ -68,8 +70,14 @@ def test_trace_22_muestra_parametros_y_comparacion_de_estrategias(dashboard, mon
     viewer = cargar_script("viz/viewer.py")
     trace = trace_de_prueba()
     trace["schema_version"] = "2.2"
-    trace["config"].update({"seed": 3, "politica": {"asignacion": "subasta", "umbral_aviso": .7},
-                            "combustible": {"tanque_cosechadora": 80, "tanque_carro": 60}})
+    trace["config"].update({"seed": 3, "politica": {"asignacion": "subasta", "umbral_aviso": .7,
+                                                   "atender_desde_bodega": True, "encadenar_servicios": False,
+                                                   "espera_propuestas": 2, "reintento_subasta": 3},
+                            "incertidumbre": {"rendimiento": {"minimo": 1, "maximo": 4},
+                                              "duracion_extra_maxima": 2,
+                                              "retraso_mensajes": {"probabilidad": .25, "maximo": 3}},
+                            "combustible": {"tanque_cosechadora": 80, "tanque_carro": 60,
+                                            "reserva": .15, "tasa_recarga": 0}})
     trace["mundo"]["obstaculos"] = [[3, 2]]
     carpeta = preparar(tmp_path, trace)
     png = viewer.guardar_cuadros(viewer.Reproductor(trace), carpeta / "cuadros", 20)[0].read_bytes()
@@ -82,6 +90,10 @@ def test_trace_22_muestra_parametros_y_comparacion_de_estrategias(dashboard, mon
     assert "trace 2.2" in html and "Comparación por estrategia" in html
     assert "subasta" in html and "0.7" in html and "80" in html and "60" in html
     assert "costo j por termino" in html and "estrategia" in html
+    assert "<td>Sí</td><td>No</td><td>2</td><td>3</td><td>1</td><td>4</td>" in html
+    assert "<td>2</td><td>0.25</td><td>3</td><td>0.15</td><td>0</td>" in html
+    assert "Sin gráficas de comparación por estrategia" not in html
+    assert "Sin tablas de resultados por estrategia o costo J" not in html
     assert len(InspeccionHTML(html).imagenes) == 3
 
 
