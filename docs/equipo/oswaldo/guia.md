@@ -1,94 +1,92 @@
-# Guía de Oswaldo — Rutas y carro
+# Guía de Oswaldo — Rutas y carro (segunda entrega)
 
-**Tu parte en una frase:** escribes el cálculo de rutas (BFS y resolución de conflictos, funciones puras) y el agente carro (su máquina de estados).
+**Tu parte en una frase:** rutas en el tiempo que no chocan ni se bloquean, y el carro como **contratista** de la subasta: oferta, acompaña a la cosechadora y atiende su fila de servicios.
 
-**Por qué importa:** las rutas las usan el mundo y los dos agentes; el carro es la mitad de la coordinación que se mide. En la rúbrica, criterios 1 (arquitectura del agente) y 2 (reglas del entorno).
+**Por qué importa:** cumple lo que prometimos en la propuesta («2 carros en un pasillo: 0 colisiones y 0 bloqueos») y la mitad del protocolo de comunicación (Contract Net).
 
-**Fecha límite:** martes 17, antes de la clase. **Objetivo personal:** `rutas.py` el **lunes en la tarde** (destraba a todos) y `carro.py` el lunes en la noche.
+**Archivos tuyos:** `src/harvest_sim/rutas.py`, `src/harvest_sim/carro.py`, `tests/test_rutas.py`, `tests/test_carro.py`, y tus notas en `docs/equipo/oswaldo/` (`rutas.md`, `carro.md`: actualízalas).
 
-**Archivos tuyos:** `src/harvest_sim/rutas.py`, `src/harvest_sim/carro.py`, `tests/test_rutas.py`, `tests/test_carro.py`.
+**Lee antes:** [README del equipo](../README.md); especificación de la segunda entrega §5, §6, §7 y §9.
 
-**Lee antes:** [README del equipo](../README.md) §3; especificación §2 (vecindad y reglas físicas), §4.2 (conflictos), §4.3 (duraciones), §5.2 (carro) y §5.3.
+**Condición:** con `asignacion: "directa"` el carro se comporta **exactamente** como en v0.1 (regresión).
 
 ---
 
 ## Tareas (en orden)
 
-### 1. `rutas.py` — 1 h 30 min ⚡ (súbelo en cuanto pase: Carlos y Emilio lo necesitan)
-
-Las firmas y lo que debe hacer cada función ya están en los docstrings del archivo. Resumen:
-
-| Función | Qué devuelve | Ejemplo (mapa 4 × 3) |
-|---|---|---|
-| `vecinos(celda, ancho, alto)` | Vecinos dentro del mapa en orden **N, E, S, O** | `vecinos((0, 0), 4, 3) == [(1, 0), (0, 1)]` |
-| `bfs(origen, destino, ancho, alto, bloqueadas)` | Ruta **sin** el origen y **con** el destino; `[]` si son iguales; `None` si no hay ruta | `bfs((0, 0), (2, 0), 4, 3, set()) == [(1, 0), (2, 0)]` |
-| `elegir_celda_objetivo(origen, objetivo, ancho, alto, bloqueadas, evitar)` | Celda vecina de `objetivo` donde se estaciona el carro (reglas 1–4 del docstring) | |
-| `siguiente_paso(pos, ruta, destino, ancho, alto, ocupadas, bloqueadas_fijas)` | `(celda, ruta_restante)` o `(None, ruta)` si debe esperar | |
-
-- BFS determinista: expande en orden N, E, S, O y usa `collections.deque`. Nunca entra a `bloqueadas`.
-- Funciones **puras**: no importes `Mundo` ni agentes.
-- Escribe los cuerpos de las pruebas de `tests/test_rutas.py` (cada una ya tiene su docstring con lo que debe verificar) y quita el `skip`.
-- **Listo cuando:** `pytest tests/test_rutas.py` pasa los 9 tests sin `skip`.
-
-### 2. Dobles de prueba — 20 min
-
-En `tests/test_carro.py`, un `Mundo` falso (posiciones, `ocupadas`, `bloqueadas_fijas`, `ruta_bfs`, `depositar`, `registrar_bloqueo`, `vecinos`, `camino_serpentina`) y un `Buzon` falso (`leer`, `hay_pendientes`). Así no esperas a Carlos ni a Emilio.
-
-### 3. `carro.py` — 2 h
-
-- Implementa la tabla del §5.2 en `Carro.paso(tick, mundo, buzon)`. Atributos públicos: `agent_id`, `posicion` (tupla), `estado` (`EstadoCarro`), `carga`, `capacidad`.
-- Solo revisa su fila (`buzon.leer`) estando en `EN_BASE` (regla del carro ocupado).
-- Para moverse: `siguiente_paso(...)`. Si devuelve `None` porque la celda está ocupada, **llama `mundo.registrar_bloqueo(self.agent_id)`** y espera ese tick.
-- Orientación: la dirección del último movimiento (`N`, `E`, `S`, `O`); inicial `N`.
-- Descarga: `duracion_ticks(carga, tasa_descarga)`; al terminar, `mundo.depositar(self.agent_id)` (el mundo genera el evento `DEPOSITO`; tú no).
-- Un estado de duración `N` aparece en exactamente `N` ticks del log (§4.3).
-- **Listo cuando:** pasan los 6 tests de `tests/test_carro.py` (escribe sus cuerpos a partir de los docstrings) con los dobles.
-
-### 4. `registro(tick)` — 15 min
+### 1. `rutas.bfs_tiempo` ⚡ (función pura)
 
 ```python
-def registro(self, tick):
-    return {"tick": tick, "agent_id": self.agent_id, "tipo": "carro",
-            "pose": {"x": self.posicion[0], "y": self.posicion[1], "orientacion": self.orientacion},
-            "estado": self.estado.value, "carga": {"actual": self.carga, "capacidad": self.capacidad}}
+def bfs_tiempo(origen: Celda, destino: Celda, tick: int, ancho: int, alto: int,
+               bloqueadas: set[Celda], reservas: dict[tuple[Celda, int], str],
+               horizonte: int = 10) -> list[tuple[Celda, int]] | None:
+    """Ruta en espacio-tiempo desde (origen, tick). Cada paso: moverse a un vecino (N, E, S, O) o esperar.
+    Nunca usa (celda, t) reservada por otro, ni se intercambia: si otro tiene (c2, t) y (c1, t+1),
+    no se puede ir de c1 a c2 entre t y t+1. Devuelve [(celda, t), ...] sin el origen, hasta el destino;
+    [] si origen == destino; None si no hay ruta dentro de un límite (por ejemplo 4 × (ancho + alto) ticks)."""
 ```
 
-Nada más: sin `intencion`, sin `objetivo` (decisión del 2026-11-15). Cambia el nombre de `test_carro_registro_v1_0` a `test_carro_registro` y verifica exactamente estas claves.
+- BFS sobre estados `(celda, t)`; expandir en orden fijo: esperar, N, E, S, O (determinista).
+- Después del horizonte las reservas ya no cuentan (planea libremente, pero sigue sin obstáculos).
+- **Listo cuando:** pruebas nuevas: en un pasillo de 1 celda, dos rutas opuestas → la segunda espera y ninguna `(celda, t)` se repite ni hay intercambio; destino inalcanzable → None.
 
-### 5. Cambiar los dobles por los reales — 30 min (cuando `mundo.py` y `mensajes.py` lleguen a `development`)
+### 2. `rutas.estimar_costo` ⚡ (función pura)
 
-### 6. PDF: sección 2 «Entorno» con Carlos — 30 min (martes)
+```python
+def estimar_costo(desde: Celda, ticks_ocupado: int, hacia: Celda, ancho: int, alto: int,
+                  bloqueadas: set[Celda]) -> int | None:
+    """ticks_ocupado + distancia BFS desde `desde` hasta una celda vecina de `hacia`. None si no hay ruta."""
+```
 
-Explica el grid, la vecindad, las reglas R1–R9, BFS y la resolución de conflictos.
+### 3. Carro en modo subasta (`carro.py`)
+
+Atributos nuevos: `servicios` (fila FIFO de servicios ganados: `servicio`, cosechadora, carga anunciada), `combustible`, `tanque`.
+
+- **Lee el buzón en cada tick** (en cualquier estado) cuando `mundo.config.politica["asignacion"] == "subasta"`:
+  - `SOLICITUD_SERVICIO` → si le cabría la carga y le alcanza el combustible (`mundo.combustible_para`, respetando la reserva), responde `PROPUESTA` con `costo = rutas.estimar_costo(...)` (el `ticks_ocupado` es lo que le falta de su fila: traslados, transferencias y descargas con `mundo.duracion`); si no, `RECHAZO` con `motivo`. Si rechazó por combustible, `mundo.registrar_restriccion(id, "combustible_reserva", ...)`.
+  - `ACEPTACION` → agrega el servicio a `servicios`. `RECHAZO_PROPUESTA` → nada.
+  - `TRANSFERENCIA_TERMINADA` → quita el servicio atendido de la fila.
+- **Atender el primer servicio de la fila:** va hacia la posición **actual** de esa cosechadora (`mundo.posicion`), recalculando el objetivo cada tick con `elegir_celda_objetivo` (evitando la siguiente celda de su camino). Al quedar vecino → `ESPERANDO_TRANSFERENCIA`; si ella se aleja → `YENDO_A_COSECHADORA` y la sigue.
+- **Al terminar la transferencia:** si `encadenar_servicios` y le cabe la carga anunciada del siguiente servicio, va por él; si no, a la bodega.
+- **Al terminar de descargar:** si `atender_desde_bodega` y tiene servicios, va directo al siguiente; si no, regresa a su base.
+- **Movimiento:** con `rutas.bfs_tiempo` y `mundo.reservas(excepto=id)`; reserva su ruta con `mundo.reservar`. Si una ruta reservada se invalida y no hay alternativa: `mundo.registrar_bloqueo(id)` (no debe pasar). Si la ruta rodeó un obstáculo o esquivó a otro agente, registra la restricción correspondiente (especificación §10) **una vez por desvío**, no en cada tick.
+- **Combustible:** si con su nivel no puede ir, atender y volver sin bajar de la reserva, primero va a recargar a su base.
+- **Listo cuando:** pruebas con dobles (mundo y buzón falsos): responde propuesta y rechazo correctos; con dos servicios en fila los atiende en orden; con `encadenar_servicios` atiende dos antes de la bodega; nunca transfiere un servicio que no ganó.
+
+### 4. `registro()` con combustible
+
+Agrega `"combustible": round(self.combustible, 2)`.
+
+### 5. Modo `directa` intacto
+
+Con `asignacion: "directa"`, el carro solo lee su buzón en `EN_BASE` y atiende `LLENA` como en v0.1, usando su BFS de siempre si hay un solo carro. Corre `pytest tests/test_carro.py` y la regresión de Ilan.
+
+### 6. Notas y PDF
+
+Actualiza `docs/equipo/oswaldo/rutas.md` y `carro.md` con el diseño nuevo (rutas en el tiempo y contratista). Sección del PDF: rutas sin colisiones y asignación por subasta (para Joel).
 
 ---
 
-## Contrato con Datos
-
-- Tu `registro()` alimenta los eventos `AGENTE` del trace. Si un tick cambian `pose` o `carga`, el builder lo detecta solo.
-- Cada `registrar_bloqueo` se vuelve un evento `BLOQUEO`; la métrica `ticks_bloqueados` los cuenta. No lo llames cuando el carro espera la transferencia (eso es `ESPERANDO_TRANSFERENCIA`, no un bloqueo).
-
 ## Dependencias
 
-- **Dependes de:** nadie para `rutas.py`; del layout de Carlos y del `Buzon` de Emilio para el carro real (mientras, dobles).
-- **Dependen de ti:** Carlos (`Mundo.vecinos` y `ruta_bfs` delegan en tu `rutas.py`), Emilio (la cosechadora usa `siguiente_paso`).
+- **Dependes de:** nadie para `rutas.py`; del mundo (reservas, combustible) y del buzón (tipos nuevos) para el carro real. Mientras, dobles en `tests/test_carro.py`.
+- **Dependen de ti:** Emilio (la cosechadora usa `bfs_tiempo` y espera tus propuestas), Carlos (escenario E), Ilan (prueba del pasillo).
 
 ## Cómo probar
 
 ```bash
 pytest tests/test_rutas.py tests/test_carro.py -q
+python -m harvest_sim.cli config/escenario_e.json --sin-plots && python tools/validar_trace.py runs/escenario_e/trace.json
 ```
 
 ## Definición de listo
 
-- [ ] `rutas.py` sin `NotImplementedError`, 9 tests pasando, determinista.
-- [ ] `carro.py` completo, 6 tests pasando.
-- [ ] `registro()` con exactamente las 6 claves del contrato.
-- [ ] `registrar_bloqueo` se llama solo cuando el carro no pudo moverse por una celda ocupada.
+- [ ] `bfs_tiempo` y `estimar_costo` con pruebas, deterministas.
+- [ ] Carro contratista completo; modo `directa` igual que en v0.1.
+- [ ] Escenario E: 0 colisiones y 0 `BLOQUEO`.
 
 ## Errores comunes
 
-- BFS que devuelve la ruta con el origen incluido.
-- Expandir vecinos en otro orden (rompe el determinismo y la reproducibilidad).
-- Revisar la fila de mensajes fuera de `EN_BASE`.
-- Devolver tuplas en `pose` o `estado` como `Enum` en lugar de `.value`.
+- Expandir el BFS en orden distinto: rompe el determinismo.
+- Olvidar el chequeo de intercambio (dos carros que se cruzan en el mismo paso).
+- Contar una espera planeada como `BLOQUEO`.

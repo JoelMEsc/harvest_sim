@@ -1,87 +1,84 @@
-# Guía de Emilio — Mensajes y cosechadora
+# Guía de Emilio — Mensajes y cosechadora (segunda entrega)
 
-**Tu parte en una frase:** escribes el buzón por el que pasan todos los mensajes (con sus eventos para el log) y el agente cosechadora (su máquina de estados).
+**Tu parte en una frase:** el buzón con los mensajes de la subasta y retraso aleatorio, y la cosechadora como **administradora** del servicio: recorre su franja, pide carro al llegar al umbral, decide la subasta y transfiere solo con el carro contratado.
 
-**Por qué importa:** el mensaje `LLENA` es la coordinación entre agentes y el tiempo ocioso de la cosechadora es la métrica principal. En la rúbrica, criterio 1 (arquitectura del agente y mecanismos de comunicación) y la sección de ontología: la `performativa` de cada mensaje es el acto comunicativo (KQML / FIPA-ACL) que se vio en clase.
-
-**Fecha límite:** martes 17, antes de la clase. **Objetivo personal:** `Buzon` el **lunes en la tarde** (destraba a todos) y `cosechadora.py` el lunes en la noche.
+**Por qué importa:** es el mecanismo de comunicación entre agentes (Contract Net con performativas KQML/FIPA-ACL), el tema central de la rúbrica, y el despacho anticipado, la mejora que se compara contra la línea base.
 
 **Archivos tuyos:** `src/harvest_sim/mensajes.py`, `src/harvest_sim/cosechadora.py`, `tests/test_mensajes.py`, `tests/test_cosechadora.py`.
 
-**Lee antes:** [README del equipo](../README.md) §3; especificación §4.1, §4.3, §4.4, §4.5, §5.1, §5.3 y §6.3; [docs/ontologia.md](../../ontologia.md).
+**Lee antes:** [README del equipo](../README.md); especificación de la segunda entrega §3, §4, §6, §7, §8 y §9.
+
+**Condición:** con `asignacion: "directa"` y `umbral_aviso: 1.0` la cosechadora se comporta **exactamente** como en v0.1.
 
 ---
 
 ## Tareas (en orden)
 
-### 1. `Buzon` — 1 h 30 min ⚡ (súbelo en cuanto pase)
+### 1. Buzón con tipos nuevos y retraso ⚡
 
-- Fila FIFO por agente (`collections.deque`), `id` entero creciente desde 1, entrega en `tick_envio + 1`.
-- `enviar(mensaje) -> int`: asigna el id, lo guarda como pendiente, **agrega el evento** y lo imprime (§6.3):
-  ```python
-  from harvest_sim.datos.formato import PERFORMATIVAS
-  self._eventos.append({"tipo": "MENSAJE_ENVIADO", "id": mensaje.id, "tipo_mensaje": mensaje.tipo.value,
-                        "performativa": PERFORMATIVAS[mensaje.tipo.value], "de": mensaje.emisor,
-                        "a": mensaje.receptor, "payload": dict(mensaje.payload), "entrega_en": mensaje.tick_envio + 1})
-  ```
-- `entregar(tick)`: pasa a las filas los mensajes con `entrega_en == tick`, en orden de id, y por cada uno agrega `{"tipo": "MENSAJE_ENTREGADO", "id": n, "a": receptor}` y lo imprime.
-- `leer(agent_id)`, `hay_pendientes(agent_id)` (fila de entrada **o** mensajes en tránsito hacia ese agente).
-- Reemplaza `registro()` por `drenar_eventos() -> list[dict]` (devuelve los eventos y vacía la lista). El formato v2.0 ya no usa `registro()`.
-- Logging con `logging.getLogger("harvest_sim.mensajes")`, formato exacto del §6.3 (sin fecha ni hora).
-- Escribe los cuerpos de los 5 tests de `tests/test_mensajes.py` (renombra `test_registro_de_mensajes_para_el_log` a `test_eventos_de_mensajes_para_el_log` y verifica los dos eventos con `performativa`).
-- **Listo cuando:** pasan los 5 tests sin `skip`.
+- `TipoMensaje`: agrega `SOLICITUD_SERVICIO`, `PROPUESTA`, `RECHAZO`, `ACEPTACION`, `RECHAZO_PROPUESTA` (tabla del README del equipo §3.3).
+- La performativa del evento sale de `datos.formato.PERFORMATIVAS[tipo]` (Joel agrega los tipos nuevos ahí).
+- `Buzon(azar=None, probabilidad=0.0, maximo=0)`: al enviar, `entrega_en = t + 1`; si `azar` existe y `azar.random() < probabilidad`, `entrega_en += azar.randint(1, maximo)`. Con probabilidad 0 **no** llames al generador.
+- `entregar(t)`: entrega los mensajes con `entrega_en == t`, ordenados por id.
+- **Listo cuando:** con probabilidad 0 todo es igual que antes; con probabilidad 1 y máximo 2, `entrega_en` cae en [t+2, t+3] y se entrega exactamente ese tick (pruebas).
 
-### 2. Dobles de prueba — 20 min
+### 2. Cosechadora con varios agentes y obstáculos
 
-En `tests/test_cosechadora.py`, un `Mundo` falso mínimo (posiciones, `camino_serpentina`, `ocupadas`, `bloqueadas_fijas`, `ruta_bfs`, `cosechar`, `transferir`, `estado_de`, `vecinos`, `registrar_bloqueo`).
+- Usa `mundo.camino(self.agent_id)` (su franja) en lugar de `camino_serpentina()`.
+- Ya no supongas `"carro_1"`: el carro con el que transfiere es el **contratado** (subasta) o el asignado (`directa`: carro ((j−1) mod n) + 1).
+- Si la siguiente celda del camino no es vecina (hay obstáculo entre ellas), trasládate con `rutas.bfs_tiempo` en estado `YENDO_A_CAMPO` y vuelve a `COSECHANDO` al llegar.
+- Reserva tus próximas celdas del camino con `mundo.reservar` (horizonte 10) para que los carros te rodeen.
+- Cosecha con la cantidad que devuelve `mundo.cosechar`. Si la siguiente celda no cabe (`carga + mundo.rendimiento(celda) > capacidad`), te consideras llena.
 
-### 3. `cosechadora.py` — 2 h
+### 3. Administrar la subasta
 
-- La tabla del §5.1 en `Cosechadora.paso(tick, mundo, buzon)`. Atributos públicos: `agent_id`, `posicion`, `estado` (`EstadoCosechadora`), `carga`, `capacidad`.
-- Cosechar con `mundo.cosechar(...)` (el mundo genera `CELDA_COSECHADA`). Transferir con `mundo.transferir(...)`.
-- Mensajes: `buzon.enviar(Mensaje(TipoMensaje.LLENA, self.agent_id, "carro_1", tick, {"x": x, "y": y, "carga": carga}))` al llenarse **o** en la última celda (carga parcial); `TRANSFERENCIA_TERMINADA` con `{"cantidad": δ}` al terminar.
-- Si la siguiente celda de la serpentina está ocupada: **llama `mundo.registrar_bloqueo(self.agent_id)`** y espera ese tick (no es tiempo ocioso: el ocioso es solo `LLENA_ESPERANDO`).
-- Duración de la transferencia: `duracion_ticks(carga, tasa_transferencia)`; el estado aparece en exactamente `N` ticks (§4.3).
-- Orientación inicial `S`.
-- **Listo cuando:** pasan los 8 tests de `tests/test_cosechadora.py` con los dobles.
+Estado interno del servicio actual: `servicio` (id `"<tu id>#<n>"`), `propuestas` recibidas, tick de la llamada y `carro_contratado`.
 
-### 4. `registro(tick)` — 15 min
+- **Llamada:** cuando `carga ≥ umbral_aviso × capacidad` (o en tu última celda) y no tienes servicio en curso, envía `SOLICITUD_SERVICIO` a **cada** carro con `servicio, x, y, carga, capacidad`. **Sigue cosechando** mientras haya lugar.
+- **Recolección:** lee tu buzón cada tick; guarda `PROPUESTA` y `RECHAZO` de ese servicio.
+- **Decisión:** al pasar `espera_propuestas + retraso máximo` ticks desde la llamada, elige el menor `costo` (empate: menor id), envía `ACEPTACION` al ganador y `RECHAZO_PROPUESTA` a los demás que propusieron. Sin propuestas: nueva llamada tras `reintento_subasta` ticks.
+- **Transferencia:** solo si estás en `LLENA_ESPERANDO` y el **carro contratado** está vecino y en `ESPERANDO_TRANSFERENCIA`. Al terminar (`mundo.duracion` para la duración), `TRANSFERENCIA_TERMINADA` con `servicio` y `cantidad`.
+- **Modo `directa`:** se conserva `LLENA` al llenarte, como en v0.1.
 
-Igual que el carro, con `"tipo": "cosechadora"`: `tick`, `agent_id`, `tipo`, `pose {x, y, orientacion}`, `estado` (`.value`), `carga {actual, capacidad}`. Nada más. Renombra `test_cosechadora_registro_v1_0` a `test_cosechadora_registro`.
+### 4. Combustible
 
-### 5. Cambiar los dobles por los reales — 30 min
+Antes de seguir cosechando después de una transferencia, estima si te alcanza para lo que falta de tu camino y volver a tu base sin bajar de la reserva (`mundo.combustible_para`). Si no: `mundo.registrar_restriccion(id, "combustible_reserva", ...)`, ve a tu base, espera la recarga y regresa a la celda donde te quedaste. `registro()` agrega `"combustible"`.
 
-### 6. PDF: arquitectura del agente y comunicación, con Carlos — 45 min (martes)
+### 5. Pruebas (con dobles de mundo y buzón)
 
-Explica la máquina de estados de cada agente (reactivo con estado), el buzón y los dos mensajes con su performativa (`request` y `inform`), y por qué un mensaje enviado en `t` se lee en `t+1`. Apóyate en [docs/ontologia.md](../../ontologia.md).
+- Llamada al llegar al umbral (0.7 con capacidad 10 → a las 7 unidades).
+- Decide por menor costo; empate por id; sin propuestas, reintenta.
+- No transfiere con un carro no contratado aunque esté vecino.
+- Se traslada sin cosechar alrededor de un obstáculo.
+- Va a recargar cuando no le alcanza.
+- Modo `directa`: mismos mensajes que v0.1.
+
+### 6. PDF: arquitectura del agente y protocolo de comunicación (para Joel)
+
+Diagrama de la secuencia cfp → propose/refuse → accept/reject → inform, con las performativas y los estados de cada agente.
 
 ---
 
-## Contrato con Datos
-
-- Eventos de mensajes: exactamente los campos de arriba. El validador rechaza un `MENSAJE_ENVIADO` sin `performativa`, con una performativa que no corresponde al tipo, o con `entrega_en` distinto de `tick + 1`.
-- Ejemplo real: busca `MENSAJE_ENVIADO` en `tests/fixtures/trace_ejemplo.json`.
-
 ## Dependencias
 
-- **Dependes de:** nadie para el `Buzon`; del layout de Carlos y de `siguiente_paso` de Oswaldo para la cosechadora (mientras, dobles).
-- **Dependen de ti:** Oswaldo (el carro lee el buzón), Carlos (`simulacion` usa el buzón y la cosechadora).
+- **Dependes de:** nadie para el buzón; del mundo de Carlos (franjas, reservas, combustible) y de `bfs_tiempo` de Oswaldo para la cosechadora real. Mientras, dobles.
+- **Dependen de ti:** Oswaldo (el carro responde a tus llamadas), Carlos (simulación), Joel (performativas en el log).
 
 ## Cómo probar
 
 ```bash
 pytest tests/test_mensajes.py tests/test_cosechadora.py -q
+python -m harvest_sim.cli config/escenario_d.json --sin-plots && python tools/validar_trace.py runs/escenario_d/trace.json
 ```
 
 ## Definición de listo
 
-- [ ] `Buzon` con `drenar_eventos()` y logging del §6.3; 5 tests pasando.
-- [ ] `cosechadora.py` completa; 8 tests pasando.
-- [ ] `performativa` importada de `formato.PERFORMATIVAS`, no escrita a mano.
+- [ ] Buzón con los 7 tipos, performativas y retraso; probabilidad 0 = v0.1.
+- [ ] Cosechadora: franja, obstáculos, umbral, subasta completa, combustible.
+- [ ] D termina y la secuencia de mensajes de cada servicio es cfp → propose/refuse → accept/reject → inform.
 
 ## Errores comunes
 
-- Entregar un mensaje en el mismo tick en que se envía.
-- Enviar `LLENA` dos veces cuando la cosechadora se llena justo en la última celda.
-- Contar como bloqueo la espera del carro (`LLENA_ESPERANDO` no llama a `registrar_bloqueo`).
-- Guardar el `Enum` en el evento (`TipoMensaje.LLENA`) en lugar del texto (`"LLENA"`).
+- Mandar la `ACEPTACION` antes de que lleguen todas las propuestas (no esperar el retraso máximo).
+- Dejar de cosechar al mandar la llamada (eso es reactivo, no anticipado).
+- Escribir la performativa a mano en lugar de importarla.

@@ -2,11 +2,15 @@
 
 Reto agrícola multiagente con John Deere · Equipo 3 · TC2008B.
 
+**Carpeta de Drive con evidencias:** [Google Drive](https://drive.google.com/drive/folders/1XX1WP433XIvwLuCjnjkFnRm9IYrBwJON?usp=sharing)
+
 Una **cosechadora** recorre un campo en cuadrícula en serpentina. Cuando se llena, le manda un mensaje al **carro recolector**, que va hasta ella, recibe el grano y lo lleva a la **bodega**. El tiempo que la cosechadora pasa llena esperando al carro es el **tiempo ocioso**, la métrica principal del reto. Esta versión es la **línea base reactiva** (el carro sale solo cuando la cosechadora ya está llena), contra la que se compararán las mejoras de coordinación.
 
 La simulación está escrita en Python y produce un log por corrida (`trace.json`). El visor, las métricas, las gráficas, los experimentos y el dashboard **solo leen ese archivo**: la simulación es la única fuente de verdad.
 
 > **Estado (17 de noviembre de 2026):** entrega completa e integrada en `development` y `main`. Los tres escenarios corren de principio a fin, sus logs validan y las 230 pruebas pasan.
+>
+> **Segunda entrega (en curso): coordinación multiagente.** Varios agentes, obstáculos, subasta Contract Net, despacho anticipado, aleatoriedad, combustible, costo J y servidor FastAPI para Unity. Qué se construye: [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md). Guía de cada persona: [`docs/equipo/`](docs/equipo/README.md). Visualización 3D: repositorio [`harvest-simu-visualization`](https://github.com/GioMax102/harvest-simu-visualization).
 
 ---
 
@@ -237,8 +241,9 @@ runs/                    salidas de las corridas (no se versionan)
 
 | Documento | Para qué |
 |---|---|
+| [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md) | Qué agrega la segunda entrega: varios agentes, obstáculos, subasta, despacho anticipado, aleatoriedad, combustible, costo J, trace 2.2 y servidor |
 | [`docs/especificacion_primera_entrega.md`](docs/especificacion_primera_entrega.md) | Qué hace el sistema: mundo, reglas, agentes, mensajes, formato del log, métricas, pruebas y contrato entre módulos |
-| [`docs/equipo/README.md`](docs/equipo/README.md) | Contrato del log, fórmula del campo, reparto de la entrega y una guía por persona |
+| [`docs/equipo/README.md`](docs/equipo/README.md) | Contrato de la entrega actual y una guía por persona (la primera entrega, en `docs/equipo/entrega1/`) |
 | [`docs/plan_de_trabajo.md`](docs/plan_de_trabajo.md) | Reparto, cronograma y flujo de git |
 | [`docs/decisiones.md`](docs/decisiones.md) | Cada decisión de diseño con sus alternativas |
 | [`docs/ontologia.md`](docs/ontologia.md) | Clases de la ontología del curso, performativas y relación con IEEE 1872 / 1872.2 / 1873 / 7007 |
