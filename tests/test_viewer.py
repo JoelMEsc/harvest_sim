@@ -258,3 +258,28 @@ def test_cli_rechaza_nombre_con_escape_de_carpeta(cli_preparada, tmp_path, capsy
     config.nombre = "../fuera"
     assert cli.main(["config.json", "--salida", str(tmp_path)]) == 1
     assert "sin rutas" in capsys.readouterr().err
+
+
+def test_cli_sobrescribe_seed_y_estrategia_sin_cambiar_config_original(cli_preparada, monkeypatch, tmp_path):
+    from dataclasses import make_dataclass
+    from harvest_sim.datos import experimentos
+
+    cli, _, trace = cli_preparada
+    ConfigPrueba = make_dataclass("ConfigPrueba", [("nombre", str), ("seed", int), ("politica", dict)], frozen=True)
+    original = ConfigPrueba("escenario_prueba", 0, {"asignacion": "directa", "espera_propuestas": 2})
+    recibidas = []
+    monkeypatch.setattr(cli, "cargar_config", lambda _: original)
+    monkeypatch.setattr(cli, "ejecutar", lambda cfg: recibidas.append(cfg) or trace)
+    monkeypatch.setattr(experimentos, "ESTRATEGIAS", {"anticipada": {"asignacion": "subasta", "umbral_aviso": .7}}, raising=False)
+    assert cli.main(["config.json", "--salida", str(tmp_path), "--sin-plots", "--seed", "3", "--estrategia", "anticipada"]) == 0
+    assert recibidas[0].seed == 3
+    assert recibidas[0].politica == {"asignacion": "subasta", "espera_propuestas": 2, "umbral_aviso": .7}
+    assert original.seed == 0 and original.politica == {"asignacion": "directa", "espera_propuestas": 2}
+
+
+def test_cli_rechaza_seed_negativa_y_estrategia_sin_contrato(cli_preparada, tmp_path, capsys):
+    cli, _, _ = cli_preparada
+    assert cli.main(["config.json", "--salida", str(tmp_path), "--seed", "-1"]) == 1
+    assert "--seed" in capsys.readouterr().err
+    assert cli.main(["config.json", "--salida", str(tmp_path), "--estrategia", "subasta"]) == 1
+    assert "ESTRATEGIAS" in capsys.readouterr().err
