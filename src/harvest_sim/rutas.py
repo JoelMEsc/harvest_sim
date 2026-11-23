@@ -196,6 +196,7 @@ def bfs_tiempo(
     bloqueadas: set[Celda],
     reservas: Reservas,
     horizonte: int = HORIZONTE,
+    permanencia: int | None = None,
 ) -> list[PasoEnTiempo] | None:
     """Ruta en espacio-tiempo desde (origen, tick) hasta `destino` (§5, idea de A* cooperativo).
 
@@ -204,8 +205,9 @@ def bfs_tiempo(
       - nunca usa una (celda, t) de `reservas` (reservadas por OTROS agentes: el que llama
         pasa mundo.reservas(excepto=su_id));
       - nunca se intercambia: si otro tiene (c2, t) y (c1, t + 1), no va de c1 a c2 entre t y t + 1;
-      - solo llega al destino en un tick después del cual nadie más lo tiene reservado
-        (así puede quedarse ahí).
+      - solo llega al destino en un tick t si nadie más lo tiene reservado durante los
+        `permanencia` ticks siguientes (el tiempo que se va a quedar ahí, por ejemplo lo que
+        dura la descarga en la bodega). None = el resto del horizonte (se estaciona).
     Después del horizonte las reservas ya no cuentan: la búsqueda sigue como BFS normal
     (sin esperas), pero siempre sin pasar por `bloqueadas`.
 
@@ -214,7 +216,9 @@ def bfs_tiempo(
     destino está bloqueado o no hay ruta. Siempre termina: hay a lo más celdas × (horizonte + 1)
     estados con tiempo, más uno por celda después del horizonte.
     """
-    return _bfs_tiempo(origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte, True)
+    return _bfs_tiempo(
+        origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte, True, permanencia
+    )
 
 
 def _bfs_tiempo(
@@ -227,6 +231,7 @@ def _bfs_tiempo(
     reservas: Reservas,
     horizonte: int,
     evitar_intercambio: bool,
+    permanencia: int | None = None,
 ) -> list[PasoEnTiempo] | None:
     """bfs_tiempo con el chequeo de intercambio opcional (apagarlo solo sirve a clasificar_desvio)."""
     if origen == destino:
@@ -235,11 +240,12 @@ def _bfs_tiempo(
         return None
 
     limite = tick + horizonte
-    # Último tick (dentro del horizonte) en que otro agente tiene el destino: llegar antes
-    # obligaría a salir de ahí o a chocar.
-    ultima_del_destino = max(
-        (t for (celda, t) in reservas if celda == destino and tick < t <= limite), default=None
-    )
+    # Ticks (dentro del horizonte) en que otro agente tiene el destino.
+    ocupado_destino = sorted(t for (celda, t) in reservas if celda == destino and tick < t <= limite)
+
+    def puede_quedarse(t_llegada: int) -> bool:
+        hasta = limite if permanencia is None else t_llegada + permanencia
+        return not any(t_llegada < t <= hasta for t in ocupado_destino)
 
     def clave(celda: Celda, t: int) -> tuple[Celda, int | None]:
         # Después del horizonte el tiempo ya no importa: un solo estado por celda.
@@ -269,7 +275,7 @@ def _bfs_tiempo(
                     if otro is not None and reservas.get((celda, t_sig)) == otro:
                         continue
             padre[k] = (celda, t)
-            if siguiente == destino and (ultima_del_destino is None or ultima_del_destino < t_sig):
+            if siguiente == destino and puede_quedarse(t_sig):
                 return _reconstruir_tiempo(padre, (siguiente, t_sig), clave)
             fila.append((siguiente, t_sig))
 
@@ -289,17 +295,30 @@ def _reconstruir_tiempo(padre, final: PasoEnTiempo, clave) -> list[PasoEnTiempo]
 
 
 def reservas_de_ruta(
-    origen: Celda, ruta: list[PasoEnTiempo], tick: int, horizonte: int = HORIZONTE
+    origen: Celda,
+    ruta: list[PasoEnTiempo],
+    tick: int,
+    horizonte: int = HORIZONTE,
+    permanencia: int | None = None,
 ) -> list[PasoEnTiempo]:
     """Lo que el agente reserva con mundo.reservar: (origen, tick), los pasos de `ruta` hasta
-    tick + horizonte y, si la ruta termina antes, su celda final repetida hasta tick + horizonte
-    (se queda ahí). Con ruta == [] reserva quedarse en `origen` todo el horizonte: así un
-    agente quieto (en su base, esperando la transferencia, descargando) también se reserva.
+    tick + horizonte y, si la ruta termina antes, su celda final repetida:
+      - permanencia None: hasta tick + horizonte (se estaciona ahí);
+      - permanencia k: los k ticks siguientes a la llegada COMPLETOS, aunque pasen del horizonte.
+        Es una estancia corta y conocida (la descarga); si se cortara en el horizonte, otro
+        agente podría reservar el destino justo en el hueco, cuando este todavía lo ocupa.
+    Con ruta == [] reserva quedarse en `origen`: así un agente quieto (en su base, esperando la
+    transferencia) también se reserva.
     """
     limite = tick + horizonte
     resultado = [(origen, tick)] + [(celda, t) for celda, t in ruta if tick < t <= limite]
     celda_final, t_final = resultado[-1]
-    resultado.extend((celda_final, t) for t in range(t_final + 1, limite + 1))
+    llego = not ruta or ruta[-1][1] <= limite
+    if permanencia is None or not llego:
+        hasta = limite
+    else:
+        hasta = t_final + permanencia
+    resultado.extend((celda_final, t) for t in range(t_final + 1, hasta + 1))
     return resultado
 
 
@@ -333,6 +352,7 @@ def clasificar_desvio(
     obstaculos: set[Celda],
     reservas: Reservas,
     horizonte: int = HORIZONTE,
+    permanencia: int | None = None,
 ) -> list[str]:
     """Qué reglas del §10 alargaron la ruta de `origen` a `destino` (para el evento RESTRICCION).
 
@@ -343,7 +363,7 @@ def clasificar_desvio(
     `bloqueadas` ya incluye los `obstaculos`. Devuelve las reglas en ese orden, o [] si la ruta
     es la más corta posible o si no hay ruta (eso es un bloqueo, no un desvío).
     """
-    ruta = bfs_tiempo(origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte)
+    ruta = bfs_tiempo(origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte, permanencia)
     espacial = bfs(origen, destino, ancho, alto, bloqueadas)
     if ruta is None or espacial is None:
         return []
@@ -354,7 +374,7 @@ def clasificar_desvio(
         reglas.append(R10_OBSTACULO)
 
     con_intercambio = _bfs_tiempo(
-        origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte, False
+        origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte, False, permanencia
     )
     if con_intercambio is not None and len(con_intercambio) > len(espacial):
         reglas.append(R3_CELDA_OCUPADA)

@@ -355,6 +355,28 @@ def test_reservas_de_ruta_recorta_y_rellena():
     ]
     # Agente quieto: reserva su celda todo el horizonte.
     assert reservas_de_ruta((3, 2), [], 0, horizonte=2) == [((3, 2), 0), ((3, 2), 1), ((3, 2), 2)]
+    # Con permanencia (la descarga en la bodega): reserva la estancia completa, aunque pase del
+    # horizonte, y nada más; si la llegada queda fuera del horizonte, no reserva la estancia.
+    assert reservas_de_ruta((1, 0), [((0, 0), 6)], 5, horizonte=2, permanencia=3) == [
+        ((1, 0), 5), ((0, 0), 6), ((0, 0), 7), ((0, 0), 8), ((0, 0), 9),
+    ]
+    assert reservas_de_ruta((1, 0), [((0, 0), 6)], 5, horizonte=4, permanencia=1) == [
+        ((1, 0), 5), ((0, 0), 6), ((0, 0), 7),
+    ]
+    assert reservas_de_ruta((0, 0), larga, 5, horizonte=3, permanencia=2) == [
+        ((0, 0), 5), ((1, 0), 6), ((2, 0), 7), ((3, 0), 8),
+    ]
+
+
+def test_bfs_tiempo_permanencia():
+    """Con permanencia k basta que el destino esté libre los k ticks después de llegar."""
+    # Otro agente llega a (2, 0) en el tick 6. Para estacionarse, hay que llegar después de eso;
+    # para quedarse solo 2 ticks, se puede llegar en el tick 2 (se va antes del 6).
+    reservas = {((2, 0), 6): "X"}
+    assert bfs_tiempo((0, 0), (2, 0), 0, 3, 1, set(), reservas)[-1] == ((2, 0), 7)
+    assert bfs_tiempo((0, 0), (2, 0), 0, 3, 1, set(), reservas, permanencia=2)[-1] == ((2, 0), 2)
+    # Con permanencia 4 ya no cabe antes del tick 6.
+    assert bfs_tiempo((0, 0), (2, 0), 0, 3, 1, set(), reservas, permanencia=4)[-1] == ((2, 0), 7)
 
 
 def test_distancias():
