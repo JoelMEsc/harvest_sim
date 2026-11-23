@@ -1,4 +1,4 @@
-"""Visor independiente del trace 2.1 (§7.1); no importa la simulación.
+"""Visor independiente de los traces 2.1 y 2.2; no importa la simulación.
 
 Espacio: pausa; flechas: paso; Inicio/Fin: extremos; +/-: velocidad.
 --guardar-cuadros exporta PNG sin ventana cada --cada ticks, incluido el final.
@@ -20,15 +20,12 @@ FONDO = "#f5f3e9"
 TEXTO = "#20372d"
 CULTIVO = "#dbbd57"
 COSECHADO = "#e6e4d6"
-COLORES = ("#267449", "#256eab", "#a34e28", "#745ba6")
-
-
 class Reproductor:
     """Conserva el estado entre ticks dispersos; retroceder reconstruye desde 0."""
 
     def __init__(self, trace):
-        if trace.get("schema_version") != "2.1":
-            raise ValueError("se requiere un trace con schema_version 2.1")
+        if trace.get("schema_version") not in ("2.1", "2.2"):
+            raise ValueError("se requiere un trace con schema_version 2.1 o 2.2")
         self.trace = trace
         self.total = trace["meta"]["total_ticks"]
         if type(self.total) is not int or self.total < 0:
@@ -57,6 +54,7 @@ class Reproductor:
         self.cosechadas = set()
         self.entregado = 0
         self.mensajes = []
+        self.eventos = []
         self.estelas = {}
 
     def ir_a(self, destino):
@@ -65,6 +63,7 @@ class Reproductor:
             self.reiniciar()
         for tick in range(self.tick + 1, destino + 1):
             self.mensajes = []
+            self.eventos = []
             for evento in self.cambios.get(tick, []):
                 tipo = evento["tipo"]
                 if tipo == "AGENTE":
@@ -75,6 +74,8 @@ class Reproductor:
                     self.entregado = evento["entregado_total"]
                 elif tipo == "MENSAJE_ENVIADO":
                     self.mensajes.append(evento)
+                elif tipo in ("RECARGA", "RESTRICCION"):
+                    self.eventos.append(evento)
             for ident, agente in self.agentes.items():
                 pose = agente["pose"]
                 self.estelas.setdefault(ident, deque(maxlen=12)).append((pose["x"], pose["y"]))
@@ -95,7 +96,9 @@ def dibujar(rep, velocidad=8, pausa=True):
     for e in rep.mensajes:
         mensaje = f"#{e['id']} {e['tipo_mensaje']} ({e.get('performativa', '')}) {e['de']} -> {e['a']} | entrega t={e['entrega_en']} | {e['payload']}"
         lineas.extend(textwrap.wrap(mensaje, 43))
-    lineas = lineas or ["Sin envíos en este tick."]
+    for e in rep.eventos:
+        lineas.extend(textwrap.wrap(f"{e['tipo']} · {e['agente']} · {e.get('regla', e.get('nivel', ''))} {e.get('detalle', '')}", 43))
+    lineas = lineas or ["Sin mensajes ni alertas en este tick."]
     superficie = pygame.Surface((panel_x + 420, max(620, mapa_h + 280, my + 70 + len(lineas) * 23)))
     superficie.fill(FONDO)
     fuente = pygame.font.Font(None, 23)
@@ -112,10 +115,14 @@ def dibujar(rep, velocidad=8, pausa=True):
     texto(f"Tick {rep.tick} / {rep.total}   ·   {'Pausa' if pausa else 'Reproduciendo'}   ·   {velocidad:g} ticks/s", 28, 90)
     obstaculos = {tuple(p) for p in mundo.get("obstaculos", [])}
     bases = {tuple(p) for p in mundo["bases"].values()}
+    rendimiento = mundo.get("rendimiento")
+    maximo = max((max(fila) for fila in rendimiento), default=0) if rendimiento else 0
     for y in range(alto):
         for x in range(ancho):
             pos = (x, y)
             color = "#cdd8dc" if y == 0 else COSECHADO if pos in rep.cosechadas else CULTIVO
+            if y and pos not in rep.cosechadas and rendimiento and maximo:
+                color = pygame.Color(CULTIVO).lerp(pygame.Color("#a87917"), rendimiento[y][x] / maximo * .65)
             rect = pygame.Rect(28 + x * celda, 120 + y * celda, celda, celda)
             pygame.draw.rect(superficie, color, rect)
             pygame.draw.rect(superficie, "white", rect, 1)
@@ -133,7 +140,8 @@ def dibujar(rep, velocidad=8, pausa=True):
         agente = rep.agentes.get(ident)
         if not agente:
             continue
-        color = COLORES[i % len(COLORES)]
+        color = pygame.Color(0)
+        color.hsva = ((i * 137.508 + 140) % 360, 72, 72, 100)
         estela = [centro(p) for p in rep.estelas[ident]]
         if len(estela) > 1:
             pygame.draw.lines(superficie, color, False, estela, 2)
@@ -154,6 +162,14 @@ def dibujar(rep, velocidad=8, pausa=True):
         texto(f"Carga: {carga} / {capacidad} u. de grano", panel_x, py + 48)
         pygame.draw.rect(superficie, "#d8dfd7", (panel_x, py + 74, 360, 9))
         pygame.draw.rect(superficie, color, (panel_x, py + 74, round(360 * min(1, max(0, carga / capacidad))), 9))
+        if "combustible" in agente:
+            tanque = rep.trace.get("config", {}).get("combustible", {}).get(
+                "tanque_carro" if entrada["tipo"] == "carro" else "tanque_cosechadora")
+            nivel = agente["combustible"]
+            texto(f"Combustible: {nivel:g} L", panel_x, py + 86)
+            if tanque:
+                pygame.draw.rect(superficie, "#d8dfd7", (panel_x + 180, py + 92, 180, 8))
+                pygame.draw.rect(superficie, color, (panel_x + 180, py + 92, round(180 * min(1, max(0, nivel / tanque))), 8))
     texto(f"Bodega: {rep.entregado} u. de grano", panel_x, 80)
     ly = 140 + mapa_h
     for i, (color, etiqueta) in enumerate(((CULTIVO, "Por cosechar"), (COSECHADO, "Cosechada"), ("#cdd8dc", "Servicio / bases"), ("#6a6c68", "Obstáculo (X)"))):
@@ -162,7 +178,7 @@ def dibujar(rep, velocidad=8, pausa=True):
         texto(etiqueta, x + 22, y)
     texto("Espacio: pausa   Flechas: paso   Inicio / Fin", 28, ly + 65)
     texto("+ / -: velocidad   Esc: salir   B: bodega", 28, ly + 91)
-    texto("Mensajes del tick", panel_x, my, True)
+    texto("Mensajes y alertas del tick", panel_x, my, True)
     for i, linea in enumerate(lineas):
         texto(linea, panel_x, my + 42 + i * 23)
     return superficie
@@ -188,7 +204,7 @@ def guardar_cuadros(rep, carpeta, cada=10):
 
 def reproducir(rep):
     pygame.display.init()
-    pygame.display.set_caption("Harvest Sim · Visor de trace 2.1")
+    pygame.display.set_caption("Harvest Sim · Visor de trace")
     ventana = pygame.display.set_mode(dibujar(rep).get_size(), pygame.RESIZABLE)
     reloj = pygame.time.Clock()
     pausa, acumulado, velocidad = True, 0.0, 8.0

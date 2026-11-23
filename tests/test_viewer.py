@@ -84,6 +84,33 @@ def test_no_deduce_cosecha_de_la_posicion(viewer):
     assert rep.cosechadas == {(3, 2)}
 
 
+def test_visor_22_muestra_combustible_alertas_y_varios_agentes(viewer):
+    trace = trace_de_prueba()
+    trace["schema_version"] = "2.2"
+    trace["config"]["combustible"] = {"tanque_cosechadora": 100, "tanque_carro": 80}
+    trace["mundo"]["rendimiento"] = [[0] * 4, [1, 2, 3, 4], [4, 3, 2, 1]]
+    trace["agentes"].append({"id": "carro_2", "tipo": "carro", "capacidad": 6, "base": [3, 0]})
+    trace["mundo"]["bases"]["carro_2"] = [3, 0]
+    trace["ticks"][0]["cambios"].append({"tipo": "AGENTE", "id": "carro_2", "set": {
+        "pose": {"x": 3, "y": 0, "orientacion": "N"}, "estado": "EN_BASE", "carga": 0, "combustible": 80}})
+    trace["ticks"][0]["cambios"][0]["set"]["combustible"] = 100
+    trace["ticks"][0]["cambios"][1]["set"]["combustible"] = 80
+    trace["ticks"][1]["cambios"].extend([
+        {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 65}},
+        {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 15, "nivel": 80},
+        {"tipo": "RESTRICCION", "agente": "carro_2", "regla": "reserva", "detalle": "pasillo ocupado"},
+    ])
+    rep = viewer.Reproductor(trace)
+    rep.ir_a(3)
+    assert rep.agentes["carro_2"]["combustible"] == 65
+    assert {e["tipo"] for e in rep.eventos} == {"RECARGA", "RESTRICCION"}
+    assert viewer.dibujar(rep).get_width() >= 900
+    rep.ir_a(4)
+    assert rep.eventos == [] and rep.agentes["carro_2"]["combustible"] == 65
+    rep.ir_a(0)
+    assert rep.agentes["carro_2"]["combustible"] == 80
+
+
 def test_exporta_png_inicial_intermedios_y_final(viewer, tmp_path):
     ruta = tmp_path / "trace.json"
     ruta.write_text(json.dumps(trace_de_prueba()))
