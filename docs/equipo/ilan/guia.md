@@ -1,82 +1,69 @@
-# Guía de Ilan — Pruebas, CI, scripts y README
+# Guía de Ilan — Calidad (segunda entrega)
 
-**Tu parte en una frase:** escribes las pruebas que comprueban que el mundo y la simulación cumplen la especificación, mantienes el CI en verde, y dejas el repositorio reproducible en una máquina limpia.
+**Tu parte en una frase:** pruebas que demuestran que la coordinación funciona sin romper la línea base, CI con las dependencias nuevas, scripts para correr todo, la autoevaluación contra las dos rúbricas y el video.
 
-**Por qué importa:** la rúbrica da 10 puntos a reproducibilidad y documentación (criterio 8) y 15 a implementación (criterio 3, «incluye validaciones»). Tus pruebas son lo que demuestra que las reglas físicas R1–R9 se cumplen.
+**Por qué importa:** la regresión garantiza que la comparación contra la línea base es justa; las pruebas de los escenarios de conflicto son la evidencia de «0 colisiones y 0 bloqueos» que prometimos.
 
-**Fecha límite:** martes 17, antes de la clase. **No esperas a nadie para empezar.**
+**Archivos tuyos:** `tests/test_config.py`, `tests/test_mundo.py`, `tests/test_integracion.py`, `tests/test_regresion.py` (nuevo), `.github/`, `scripts/`, `docs/autoevaluacion.md`, el video.
 
-**Archivos tuyos:** `tests/test_mundo.py`, `tests/test_config.py`, `tests/test_integracion.py`, `.github/workflows/ci.yml`, `scripts/`, `README.md`, `docs/autoevaluacion.md`.
-
-**Lee antes:** [README del equipo](../README.md) completo; especificación §2 (reglas físicas), §3, §5.4, §9 y §12.
+**Lee antes:** [README del equipo](../README.md); especificación de la segunda entrega §2, §13 y §16.
 
 ---
 
 ## Tareas (en orden)
 
-### 1. CI — 30 min (primero: da la señal verde o roja a todos)
+### 1. CI ⚡
 
-`.github/workflows/ci.yml`: en cada push y PR, Python 3.12, `pip install -r requirements.txt`, `pip install -e .`, `SDL_VIDEODRIVER=dummy MPLBACKEND=Agg pytest -q`.
-- **Listo cuando:** corre en GitHub sobre `development` y da verde (hoy: 105 pasan y 53 en `skip`).
+Agrega al workflow lo que Joel suma a `requirements.txt` (FastAPI, uvicorn, httpx). Que corra `pytest -q` igual que hoy.
 
-### 2. Pruebas de configuración y del mundo — 1 h 30 min
+### 2. Regresión contra la línea base ⚡ (`tests/test_regresion.py`)
 
-- `tests/test_config.py`: agrega `"obstaculos"` a `CAMPOS` (Carlos agrega la sección a los JSON). Escribe `test_config_invalida` parametrizado: una configuración inválida por cada validación del §3 (incluidas `num_carros = 2` → «aún no soportado», un obstáculo fuera del mapa y un obstáculo no vacío → «aún no soportados»), comprobando con `pytest.raises(ValueError, match=...)`.
-- `tests/test_mundo.py`: escribe los cuerpos de los 11 tests a partir de sus docstrings. Para `test_cosechar_registra_cambio`, verifica que `mundo.drenar_eventos()` devuelve `{"tipo": "CELDA_COSECHADA", "celda": [x, y], "agente": id}` y, tras `depositar`, `{"tipo": "DEPOSITO", "agente": id, "cantidad": n, "entregado_total": total}`; y que una segunda llamada a `drenar_eventos()` devuelve `[]`. Agrega `test_registrar_bloqueo` (`{"tipo": "BLOQUEO", "agente": id}`). En `test_descripcion_del_mundo`, que trae `obstaculos` (lista vacía).
-- Escríbelas **ya**, con `skip`, y quítalo cuando `mundo.py` llegue a `development` (un PR pequeño por módulo).
-- **Listo cuando:** en `development` no queda ningún `skip` en estos dos archivos.
+- Guarda en `tests/fixtures/metricas_v0_1.json` las métricas de A, B y C de `v0.1-entrega1` (las del `resumen.csv` de esa etiqueta; quita `por_agente` si cambian sus claves, deja las del nivel superior).
+- La prueba corre A, B y C con la configuración por defecto y compara: mismas métricas del nivel superior que existían en v0.1.
+- **Esta prueba no se desactiva nunca.** Si falla, alguien cambió la línea base.
 
-### 3. Pruebas de integración (`tests/test_integracion.py`) — 2 h
+### 3. Configuración (`test_config.py`)
 
-Sobre una corrida completa de cada escenario (`ejecutar(cargar_config(...))`), usando el log. Herramientas que ya existen:
+Un caso por validación nueva de la especificación §2 (sección, campo y mensaje esperado), valores por defecto cuando faltan las secciones, y que `num_carros > 1` y obstáculos ya no fallan.
 
-```python
-from harvest_sim.datos import reconstruir, linea_de_tiempo, validar_trace, verificar_checksums, celdas_de_campo
-for estado in reconstruir(trace):          # estado completo de cada tick 0..total_ticks
-    estado["agentes"]["carro_1"]["pose"]   # {"x", "y", "orientacion"}
-    estado["celdas_cosechadas"], estado["entregado_total"], estado["eventos"]
-```
+### 4. Mundo (`test_mundo.py`)
 
-| Prueba | Qué comprobar (en cada tick) |
+`test_franjas`, reservas (`reservar` reemplaza las futuras; `reservas(excepto)`), `azar` reproducible por fuente, rendimiento fijo vs sorteado, `duracion` con y sin extra, combustible (consumo, recarga solo en base, nunca negativo) y eventos `RECARGA` y `RESTRICCION`.
+
+### 5. Integración (`test_integracion.py`)
+
+Parametriza las pruebas actuales sobre A–F (y sobre las 4 estrategias en D, E, F). Agrega:
+
+| Prueba | Qué revisa |
 |---|---|
-| `test_no_comparten_celda` | R3: dos agentes nunca en la misma celda |
-| `test_no_intercambian_posicion` | R4: nunca se intercambian entre `t-1` y `t` |
-| (nueva) `test_un_paso_por_tick` | R2: cada agente se mueve a lo más una celda (Manhattan ≤ 1) |
-| `test_conservacion_de_grano` | R7: `len(celdas_cosechadas) × grano_por_celda == suma de cargas + entregado_total` |
-| `test_terminacion` | §5.4 al final: cosechadora en `FIN`, carro en `EN_BASE`, carga 0, `entregado_total == grano_esperado(mundo)` |
-| `test_inicio_y_regreso_a_base` | Tick 0 y último tick: cada agente en su base |
-| `test_duracion_de_estados_en_el_log` | Un `TRANSFIRIENDO` dura `ceil(cantidad / tasa)` ticks |
-| `test_mensaje_pendiente_no_se_pierde` | Cada `MENSAJE_ENVIADO` tiene su `MENSAJE_ENTREGADO` en `entrega_en` |
-| `test_mensajes_viajan_al_tick_siguiente` | `entrega_en == tick + 1` |
-| `test_checksum_de_todo_el_log` | `verificar_checksums(trace)` y `validar_trace(trace) == []` |
-| `test_reproducibilidad` | Dos corridas → `texto_del_trace` idéntico |
-| `test_grano_entregado_igual_al_del_campo` | `metricas["grano_total_entregado"] == metricas["grano_esperado_total"]` |
-| `test_cambios_reconstruyen_el_mapa` | Al final, `set(celdas_cosechadas) == celdas_de_campo(mundo)`, sin repetidas |
+| `test_no_entra_a_obstaculo` | R10 en cada tick |
+| `test_pasillo_sin_colisiones_ni_bloqueos` | E: `colisiones == 0` y ningún evento `BLOQUEO`, en las 4 estrategias y 20 seeds |
+| `test_subasta_secuencia` | Cada `servicio`: un cfp por carro, una propuesta o rechazo por carro, una aceptación, los demás rechazados, un inform final |
+| `test_transferencia_solo_contratado` | Cada `TRANSFERENCIA_TERMINADA` va al carro aceptado |
+| `test_semilla_reproducible` | F: misma seed → mismo texto del trace; seeds distintas → distinto |
+| `test_retraso_mensajes` | `entrega_en` en `[t+1, t+1+máximo]` y entrega en ese tick |
+| `test_combustible_nunca_negativo` | R11 en cada tick de F |
+| `test_recargas_solo_en_base` | Cada `RECARGA` ocurre con el agente en su base |
+| `test_conservacion_de_grano` | R7 con rendimiento variable (usa `cantidad` de los eventos) |
 
-Las reglas R2, R3, R4 y R7 las revisas tú sobre corridas completas (el validador de Joel solo revisa el formato; decisión del 2026-11-16).
-- **Listo cuando:** pasan los 3 escenarios, sin `skip`.
+Herramientas: `harvest_sim.datos` (`reconstruir`, `linea_de_tiempo`, `validar_trace`, `celdas_de_campo`).
 
-### 4. Scripts — 45 min
+### 6. Scripts
 
-- `scripts/correr_todos.sh`: corre los tres escenarios con la CLI, valida los traces (`python tools/validar_trace.py runs/escenario_*/trace.json`), genera las gráficas y la comparación (`python viz/plots.py runs/escenario_*/trace.json`), corre el experimento (`python tools/correr_experimento.py config/experimentos/tasa_transferencia.json`) y el dashboard. Termina con error si algo falla (`set -euo pipefail`).
-- `scripts/verificar_instalacion.sh`: entorno virtual nuevo en una carpeta temporal, instala, corre `pytest` y `correr_todos.sh`.
+- `scripts/correr_todos.sh`: agrega D, E y F, el experimento de la entrega (`config/experimentos/estrategias.json`, de Joel) y los cuadros del visor de los escenarios nuevos.
+- `scripts/servidor.sh`: levanta `uvicorn harvest_sim.servidor:app` (para Unity).
 
-### 5. README — 30 min
+### 7. Autoevaluación (`docs/autoevaluacion.md`)
 
-El README ya documenta la instalación, la estructura, el reparto y cómo usar la parte de Datos (lo actualizó Joel el 16 de noviembre). Tú lo mantienes al día: cuando funcionen la CLI, el visor y el dashboard, quita las marcas «[por implementar]», agrega `scripts/correr_todos.sh` como forma de correr todo, dónde quedan los resultados y la sección de verificación en un entorno limpio.
+Contra las **dos** rúbricas: la de Canvas (8 criterios) y la del documento del curso (`reto/EntregaMartes10Nov21hrs.pdf`: modelo matemático, implementación algorítmica, arquitectura, calidad de simulación, ontología, ética y sostenibilidad, diseño de costo, reflexión) y su lista previa a la entrega. Para cada punto: qué lo cumple, dónde se ve y qué falta. Solo afirmaciones comprobables (números de las corridas, número real de pruebas).
 
-### 6. Autoevaluación — 30 min (martes)
+### 8. Video
 
-`docs/autoevaluacion.md`: la rúbrica nueva (8 criterios, [README del equipo](../README.md) §5) con lo que cumple el proyecto y dónde se ve cada cosa.
+Guion de 3 minutos: D (la subasta reparte el carro), E (pasillo sin choques), F (recargas y restricciones), y la comparación de estrategias. Con material de Mario Giovanni (Unity y visor).
 
-### 7. PDF: secciones 3 «Implementación» y 8 «Reproducibilidad» — 45 min (martes)
+### 9. PDF: implementación, validación y reproducibilidad (para Joel)
 
 ---
-
-## Dependencias
-
-- **Dependes de:** Carlos (config, mundo y `ejecutar`) para quitar los `skip`.
-- **Dependen de ti:** todos (CI); el PDF (reproducibilidad).
 
 ## Cómo probar
 
@@ -87,13 +74,12 @@ bash scripts/verificar_instalacion.sh
 
 ## Definición de listo
 
-- [ ] CI verde en `development`.
-- [ ] Ningún `skip` en tus pruebas; R1–R9 probadas.
-- [ ] `verificar_instalacion.sh` pasa en una carpeta limpia.
-- [ ] README y autoevaluación al día.
+- [ ] CI verde con las dependencias nuevas.
+- [ ] Regresión contra v0.1 activa y pasando.
+- [ ] Pruebas de R10, R11, subasta, reproducibilidad y pasillo, sin `skip`.
+- [ ] Autoevaluación contra las dos rúbricas; video.
 
 ## Errores comunes
 
-- Probar sobre el fixture de ejemplo en lugar de una corrida real (el fixture no es la simulación).
-- Escribir `ancho * (alto - 1)` en las pruebas: usa `grano_esperado(mundo)` o `celdas_de_campo(mundo)`.
-- Dejar el CI sin `SDL_VIDEODRIVER=dummy` (el visor falla sin pantalla).
+- Comparar contra métricas recalculadas con el código nuevo en vez de las guardadas de v0.1.
+- Escribir números en la autoevaluación que no salen de una corrida o de `pytest`.

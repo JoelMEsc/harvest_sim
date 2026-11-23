@@ -147,3 +147,23 @@ Formato por entrada:
 - **Alternativa considerada:** pasar las tasas a los constructores de los agentes desde `simulacion.py`.
 - **Por qué se descartó:** los dos agentes ya estaban escritos y probados leyendo `mundo.config`; exponerla en el mundo es una línea y no cambia sus pruebas.
 - **Afecta a:** Carlos (`mundo.py`), Emilio y Oswaldo (lectura de las tasas), Ilan (pruebas y script), Joel.
+
+## 2026-11-23 — Plan de la segunda entrega: coordinación multiagente
+- **Estado:** DECIDIDO (equipo, propuesta de Joel).
+- **Quién:** Joel, con las respuestas del equipo
+- **Decisión:**
+  1. **Asignación por subasta (Contract Net):** la cosechadora es administradora y los carros contratistas (cfp → propose/refuse → accept/reject → inform). Se conserva el modo `directa` como línea base.
+  2. **Despacho anticipado** por `umbral_aviso` (la cosechadora pide el carro antes de llenarse y el carro la acompaña), con dos variantes medibles por separado: `atender_desde_bodega` y `encadenar_servicios`. Cuatro estrategias: `base`, `subasta`, `anticipada`, `anticipada_plus`.
+  3. **Rutas con reservas espacio-tiempo** (BFS en (celda, tick) con espera); una espera planeada no es `BLOQUEO`.
+  4. **Obstáculos en la simulación** (franjas sin obstáculos, traslados con BFS); regla R10.
+  5. **Aleatoriedad con semilla** en tres fuentes independientes: rendimiento por celda, duraciones y retraso de mensajes. Sin incertidumbre, idéntico a v0.1.
+  6. **Combustible dentro de la simulación** (antes se calculaba desde el log y se retiró): consumo por celda y por tick encendido, recarga en la base, reserva de seguridad; campo `combustible` en el registro y evento `RECARGA`; regla R11.
+  7. **Restricciones de seguridad registradas** con el evento `RESTRICCION` (IEEE 7007).
+  8. **Costo J descompuesto con ablación** en lugar de aprendizaje por refuerzo.
+  9. **Trace 2.2** (solo agrega campos); el validador acepta 2.1 y 2.2.
+  10. **Unity sigue en su repositorio** (`harvest-simu-visualization`); se comunica con un **servidor FastAPI** en harvest_sim. WebGL, en la entrega final.
+  11. **OpenClaw/NemoClaw** se evalúa en la entrega final (justificación en la especificación §15).
+  12. Mismos roles; el reporte lo arma Joel. El plan no lleva fechas.
+- **Alternativa considerada:** carro libre más cercano o fila global; seguir recalculando rutas ante celdas ocupadas; combustible solo desde el log; aprendizaje por refuerzo; traer Unity a este repositorio.
+- **Por qué se descartó:** la subasta es un protocolo de comunicación entre agentes (tema del curso) y decide con información local de cada carro; recalcular provoca bloqueos mutuos en pasillos; el combustible debe influir en las decisiones para ser una restricción real; el aprendizaje por refuerzo no cabe con una línea base aún creciendo y la rúbrica acepta un costo descompuesto; Unity en otro repositorio mantiene ligero este y permite ciclos de trabajo separados.
+- **Afecta a:** todos (ver `docs/especificacion_segunda_entrega.md` y `docs/equipo/`).
