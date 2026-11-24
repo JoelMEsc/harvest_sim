@@ -14,7 +14,7 @@ Un módulo por responsabilidad:
 `harvest_sim.telemetria` reexporta lo mismo (compatibilidad con los imports del equipo).
 """
 
-from .campo import celdas_de_campo, expandir_obstaculos, grano_esperado, obstaculos
+from .campo import celdas_de_campo, expandir_obstaculos, grano_esperado, obstaculos, rendimiento
 from .formato import PERFORMATIVAS, SCHEMA_VERSION
 from .linea_de_tiempo import LineaDeTiempo, linea_de_tiempo, reconstruir
 from .metricas import calcular_metricas, distancias_al_carro, mapa_por_celda, series_temporales
@@ -35,7 +35,7 @@ __all__ = [
     "TraceBuilder", "calcular_checksum", "con_checksum", "cargar_trace", "escribir_trace", "texto_del_trace",
     "verificar_checksums",
     "LineaDeTiempo", "linea_de_tiempo", "reconstruir",
-    "celdas_de_campo", "expandir_obstaculos", "grano_esperado", "obstaculos",
+    "celdas_de_campo", "expandir_obstaculos", "grano_esperado", "obstaculos", "rendimiento",
     "calcular_metricas", "distancias_al_carro", "mapa_por_celda", "series_temporales",
     "validar_trace", "aplanar_metricas",
 ]

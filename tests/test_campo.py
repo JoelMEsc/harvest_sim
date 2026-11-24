@@ -2,7 +2,7 @@
 
 import pytest
 
-from harvest_sim.datos import celdas_de_campo, expandir_obstaculos, grano_esperado, obstaculos
+from harvest_sim.datos import celdas_de_campo, expandir_obstaculos, grano_esperado, obstaculos, rendimiento
 
 
 def mundo(**cambios):
@@ -54,3 +54,11 @@ def test_restricciones_de_los_obstaculos(seccion, fragmento):
     with pytest.raises(ValueError, match=None) as error:
         expandir_obstaculos(seccion, 6, 5)
     assert fragmento in str(error.value)
+
+
+def test_grano_esperado_con_rendimiento_variable():
+    """Mundo 3 × 3 (campo: filas 1 y 2), rendimiento por celda: 1+2+3 + 2+2+1 = 11; un obstáculo en (1, 2)
+    vale 0 y no cuenta. `rendimiento` de una celda sin matriz es grano_por_celda."""
+    m = mundo(ancho=3, alto=3, rendimiento=[[0, 0, 0], [1, 2, 3], [2, 0, 1]], obstaculos=[[1, 2]])
+    assert grano_esperado(m) == 1 + 2 + 3 + 2 + 1
+    assert rendimiento(m, (2, 1)) == 3 and rendimiento(mundo(grano_por_celda=4), (0, 1)) == 4

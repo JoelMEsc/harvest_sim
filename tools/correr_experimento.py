@@ -7,7 +7,9 @@ Lee un JSON de experimento (ver config/experimentos/), corre cada combinación, 
     resumen.csv               media, desviación estándar e IC 95 % por escenario y combinación
     sensibilidad_<param>.png  la métrica elegida contra el parámetro (si el barrido tiene un solo parámetro)
 
-Formato del JSON:
+Formato del JSON (además: `"estrategias": ["base", "anticipada", …]` y `"seeds": {"desde": 0,
+"cantidad": 20}` o una lista; con estrategias se escriben también comparacion.csv, pareada contra
+"base", y ablacion.csv, del costo J; las claves del barrido con punto entran a una sección):
     {"nombre": "tasa_transferencia",
      "escenarios": ["config/escenario_a.json", ...],     # rutas relativas a la raíz del repositorio
      "barrido": {"tasa_transferencia": [1, 2, 3, 5]},    # parámetro -> valores (producto cartesiano)
@@ -35,6 +37,9 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))  # permite correrlo sin instalar el paquete (pip install -e .)
 
 from harvest_sim.datos.experimentos import (  # noqa: E402
+    ESTRATEGIAS,
+    ablacion_costo,
+    comparar_contra_base,
     correr_experimento,
     escribir_csv,
     resumen_por_grupo,
@@ -60,7 +65,20 @@ def cargar_experimento(ruta: str | Path) -> dict:
         raise ValueError(f"al experimento le faltan {faltan}")
     if not isinstance(experimento.get("barrido", {}), dict):
         raise ValueError("barrido debe ser un objeto {parámetro: [valores]}")
+    desconocidas = [e for e in experimento.get("estrategias", []) if e not in ESTRATEGIAS]
+    if desconocidas:
+        raise ValueError(f"estrategias desconocidas {desconocidas}; hay: {list(ESTRATEGIAS)}")
     return experimento
+
+
+def seeds_de(experimento: dict) -> list[int] | None:
+    """`"seeds": [0, 1, …]` o `{"desde": 0, "cantidad": 20}`; None si el experimento usa `repeticiones`."""
+    seeds = experimento.get("seeds")
+    if seeds is None:
+        return None
+    if isinstance(seeds, dict):
+        return list(range(seeds.get("desde", 0), seeds.get("desde", 0) + seeds["cantidad"]))
+    return list(seeds)
 
 
 def main(argv=None) -> int:
@@ -69,6 +87,7 @@ def main(argv=None) -> int:
     parser.add_argument("--simulador", choices=("real", "ejemplo"), default="real",
                         help="real = simulación del equipo; ejemplo = generador de datos de ejemplo")
     parser.add_argument("--salida", default=str(RAIZ / "runs" / "experimentos"), help="carpeta base de salida")
+    parser.add_argument("--procesos", type=int, default=1, help="corridas en paralelo (default: 1)")
     args = parser.parse_args(argv)
 
     try:
@@ -79,7 +98,9 @@ def main(argv=None) -> int:
             escenarios[cfg.get("nombre") or Path(ruta).stem] = cfg
         simulador = simulador_ejemplo if args.simulador == "ejemplo" else simulador_real
         barrido = exp.get("barrido") or {}
-        filas = correr_experimento(escenarios, barrido, exp.get("repeticiones", 1), simulador)
+        estrategias = exp.get("estrategias")
+        filas = correr_experimento(escenarios, barrido, exp.get("repeticiones", 1), simulador,
+                                   estrategias=estrategias, seeds=seeds_de(exp), procesos=args.procesos)
     except NotImplementedError as exc:
         print(f"error: la simulación del equipo aún no está implementada ({exc}); "
               "para probar la herramienta usa --simulador ejemplo", file=sys.stderr)
@@ -92,6 +113,18 @@ def main(argv=None) -> int:
     parametros = list(barrido)
     resumen = resumen_por_grupo(filas, parametros)
     generados = [escribir_csv(filas, carpeta / "resultados.csv"), escribir_csv(resumen, carpeta / "resumen.csv")]
+    if estrategias and "base" in estrategias and len(estrategias) > 1:
+        generados.append(escribir_csv(comparar_contra_base(filas, parametros=parametros), carpeta / "comparacion.csv"))
+    if estrategias and any(f.get("costo_total") is not None for f in filas):
+        generados.append(escribir_csv(ablacion_costo(filas, parametros), carpeta / "ablacion.csv"))
+    if estrategias:
+        plots = _cargar_script(RAIZ / "viz" / "plots.py")
+        generados.append(plots.grafica_estrategias(resumen, carpeta / "estrategias.png"))
+        if any(f.get("costo_total") is not None for f in filas):
+            generados.append(plots.grafica_costo_j(filas, carpeta / "costo_j.png"))
+        if "base" in estrategias and len(estrategias) > 1 and not parametros:
+            generados.append(plots.grafica_diferencias(comparar_contra_base(filas), carpeta / "diferencias.png",
+                                                       exp.get("metrica", "tiempo_ocioso_total")))
     if len(parametros) == 1:
         plots = _cargar_script(RAIZ / "viz" / "plots.py")
         metrica = exp.get("metrica", "tiempo_ocioso_cosechadora")

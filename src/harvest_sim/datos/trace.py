@@ -1,4 +1,4 @@
-"""Armar, escribir, leer y verificar el trace.json (formato 2.1).  [Joel]
+"""Armar, escribir, leer y verificar el trace.json (formato 2.2).  [Joel]
 
     builder = TraceBuilder(config, mundo, agentes)
     builder.agregar_tick(tick, registros, eventos)   # en TODOS los ticks, en orden
@@ -72,7 +72,8 @@ class TraceBuilder:
     def agregar_tick(self, tick: int, registros: list[dict], eventos: list[dict]) -> None:
         """Se llama en cada tick, con ticks estrictamente crecientes.
 
-        - `registros`: Agente.registro() completos, SIN checksum, en el orden de los agentes.
+        - `registros`: Agente.registro() completos, SIN checksum, en el orden de los agentes. Si traen
+          `combustible` (2.2), también se sigue; si no, el log es igual que en 2.1.
         - `eventos`: los eventos del tick que no son AGENTE (celdas, depósitos, bloqueos, mensajes).
         Calcula los eventos AGENTE por diferencia con el tick anterior (solo los campos pose,
         estado y carga que cambian, cada campo completo), ordena todo por categoría, omite el tick
@@ -93,8 +94,11 @@ class TraceBuilder:
                 "estado": r["estado"],
                 "carga": r["carga"]["actual"],
             }
+            if r.get("combustible") is not None:  # 2.2: solo si la simulación modela el combustible
+                actual["combustible"] = round(float(r["combustible"]), 2)
             previo = self._previo.get(r["agent_id"], {})
-            nuevos = {c: actual[c] for c in CAMPOS_AGENTE if previo.get(c, _AUSENTE) != actual[c]}
+            nuevos = {c: actual[c] for c in CAMPOS_AGENTE
+                      if c in actual and previo.get(c, _AUSENTE) != actual[c]}
             if nuevos:
                 cambios_agentes.append({"tipo": "AGENTE", "id": r["agent_id"], "set": nuevos})
             self._previo[r["agent_id"]] = actual  # copia propia: el agente puede mutar su registro

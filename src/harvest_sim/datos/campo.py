@@ -102,8 +102,21 @@ def celdas_de_campo(mundo: dict) -> set[tuple[int, int]]:
     return {(x, y) for x in range(ancho) for y in range(1, alto)} - obstaculos(mundo)
 
 
+def rendimiento(mundo: dict, celda: tuple[int, int]) -> int:
+    """Grano de una celda: `mundo.rendimiento[y][x]` si el mundo lo trae (2.2, rendimiento variable);
+    si no, `grano_por_celda`."""
+    x, y = celda
+    matriz = mundo.get("rendimiento")
+    if isinstance(matriz, list) and 0 <= y < len(matriz) and 0 <= x < len(matriz[y]):
+        return matriz[y][x]
+    return mundo.get("grano_por_celda", 1)
+
+
 def grano_esperado(mundo: dict) -> int | None:
-    """Grano total del campo = celdas de campo x grano_por_celda (None si no se conoce el tamaño)."""
+    """Grano total del campo = suma del rendimiento de cada celda de campo. Sin `mundo.rendimiento`,
+    celdas de campo x grano_por_celda. None si no se conoce el tamaño."""
     if not (_es_entero(mundo.get("ancho")) and _es_entero(mundo.get("alto"))):
         return None
+    if isinstance(mundo.get("rendimiento"), list):
+        return sum(rendimiento(mundo, c) for c in celdas_de_campo(mundo))
     return len(celdas_de_campo(mundo)) * mundo.get("grano_por_celda", 1)

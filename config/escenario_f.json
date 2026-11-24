@@ -1,0 +1,55 @@
+{
+  "nombre": "escenario_f",
+  "seed": 0,
+  "ancho": 12,
+  "alto": 9,
+  "num_carros": 2,
+  "num_cosechadoras": 2,
+  "grano_por_celda": 1,
+  "capacidad_cosechadora": 8,
+  "capacidad_carro": 12,
+  "tasa_transferencia": 2,
+  "tasa_descarga": 4,
+  "max_ticks": 5000,
+  "obstaculos": {
+    "celdas": [],
+    "regiones": [
+      {
+        "inicio": [
+          3,
+          3
+        ],
+        "tamano": [
+          2,
+          2
+        ]
+      },
+      {
+        "inicio": [
+          8,
+          5
+        ],
+        "tamano": [
+          2,
+          2
+        ]
+      }
+    ]
+  },
+  "incertidumbre": {
+    "rendimiento": {
+      "minimo": 1,
+      "maximo": 2
+    },
+    "duracion_extra_maxima": 2,
+    "retraso_mensajes": {
+      "probabilidad": 0.2,
+      "maximo": 2
+    }
+  },
+  "combustible": {
+    "tanque_cosechadora": 100,
+    "tanque_carro": 60,
+    "tasa_recarga": 10
+  }
+}

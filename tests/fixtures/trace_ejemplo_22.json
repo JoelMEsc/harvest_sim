@@ -1,0 +1,147 @@
+{
+  "schema_version": "2.2",
+  "meta": {
+    "escenario": "ejemplo_22",
+    "seed": 0,
+    "total_ticks": 24,
+    "clase": "AccountabilityRecord"
+  },
+  "config": {
+    "nombre": "ejemplo_22",
+    "seed": 0,
+    "ancho": 6,
+    "alto": 4,
+    "num_carros": 2,
+    "num_cosechadoras": 2,
+    "grano_por_celda": 1,
+    "capacidad_cosechadora": 4,
+    "capacidad_carro": 8,
+    "tasa_transferencia": 3,
+    "tasa_descarga": 4,
+    "max_ticks": 500,
+    "obstaculos": {
+      "celdas": [
+        [1, 2]
+      ],
+      "regiones": []
+    },
+    "politica": {
+      "asignacion": "subasta",
+      "umbral_aviso": 0.5,
+      "atender_desde_bodega": false,
+      "encadenar_servicios": true,
+      "espera_propuestas": 2,
+      "reintento_subasta": 3
+    },
+    "incertidumbre": {
+      "rendimiento": {
+        "minimo": 1,
+        "maximo": 2
+      },
+      "duracion_extra_maxima": 0,
+      "retraso_mensajes": {
+        "probabilidad": 0.1,
+        "maximo": 1
+      }
+    },
+    "combustible": {
+      "tanque_cosechadora": 50,
+      "tanque_carro": 30,
+      "consumo_por_celda_cosechadora": 2.0,
+      "consumo_por_celda_carro": 1.0,
+      "consumo_por_tick_encendido": 0.5,
+      "reserva": 0.15,
+      "tasa_recarga": 5
+    },
+    "costo": {
+      "pesos": {
+        "tiempo": 1.0,
+        "distancia": 0.5,
+        "colisiones": 1000.0,
+        "ocio": 5.0,
+        "combustible": 0.2,
+        "restricciones": 10.0
+      }
+    }
+  },
+  "mundo": {
+    "ancho": 6,
+    "alto": 4,
+    "bodega": [0, 0],
+    "bases": {
+      "carro_1": [1, 0],
+      "carro_2": [2, 0],
+      "cosechadora_1": [3, 0],
+      "cosechadora_2": [4, 0]
+    },
+    "grano_por_celda": 1,
+    "obstaculos": [
+      [1, 2]
+    ],
+    "rendimiento": [
+      [0, 0, 0, 0, 0, 0],
+      [1, 1, 1, 1, 2, 1],
+      [1, 0, 2, 1, 1, 2],
+      [1, 1, 2, 1, 1, 1]
+    ],
+    "clase_celdas": "SemanticMapCell"
+  },
+  "agentes": [
+    {
+      "id": "cosechadora_1",
+      "tipo": "cosechadora",
+      "clase": "AutonomousAgriculturalRobot",
+      "capacidad": 4,
+      "base": [3, 0]
+    },
+    {
+      "id": "cosechadora_2",
+      "tipo": "cosechadora",
+      "clase": "AutonomousAgriculturalRobot",
+      "capacidad": 4,
+      "base": [4, 0]
+    },
+    {
+      "id": "carro_1",
+      "tipo": "carro",
+      "clase": "AutonomousAgriculturalRobot",
+      "capacidad": 8,
+      "base": [1, 0]
+    },
+    {
+      "id": "carro_2",
+      "tipo": "carro",
+      "clase": "AutonomousAgriculturalRobot",
+      "capacidad": 8,
+      "base": [2, 0]
+    }
+  ],
+  "ticks": [
+    {"tick": 0, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 0, "orientacion": "S"}, "estado": "EN_BASE", "carga": 0, "combustible": 50.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"pose": {"x": 4, "y": 0, "orientacion": "S"}, "estado": "EN_BASE", "carga": 0, "combustible": 50.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 0, "orientacion": "N"}, "estado": "EN_BASE", "carga": 0, "combustible": 30.0}}, {"tipo": "AGENTE", "id": "carro_2", "set": {"pose": {"x": 2, "y": 0, "orientacion": "N"}, "estado": "EN_BASE", "carga": 0, "combustible": 8.0}}], "checksum": "68c3116cd16f8473"},
+    {"tick": 1, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 1, "orientacion": "S"}, "estado": "COSECHANDO", "carga": 1, "combustible": 48.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"pose": {"x": 4, "y": 1, "orientacion": "S"}, "estado": "COSECHANDO", "carga": 2, "combustible": 48.0}}, {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 13.0}}, {"tipo": "CELDA_COSECHADA", "celda": [3, 1], "agente": "cosechadora_1", "cantidad": 1}, {"tipo": "CELDA_COSECHADA", "celda": [4, 1], "agente": "cosechadora_2", "cantidad": 2}, {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 5, "nivel": 13.0}, {"tipo": "MENSAJE_ENVIADO", "id": 1, "tipo_mensaje": "SOLICITUD_SERVICIO", "performativa": "cfp", "de": "cosechadora_2", "a": "carro_1", "payload": {"servicio": "cosechadora_2#1", "x": 4, "y": 1, "carga": 2, "capacidad": 4}, "entrega_en": 2}, {"tipo": "MENSAJE_ENVIADO", "id": 2, "tipo_mensaje": "SOLICITUD_SERVICIO", "performativa": "cfp", "de": "cosechadora_2", "a": "carro_2", "payload": {"servicio": "cosechadora_2#1", "x": 4, "y": 1, "carga": 2, "capacidad": 4}, "entrega_en": 2}], "checksum": "6917e885cec3c48c"},
+    {"tick": 2, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 1, "a": "carro_1"}, {"tipo": "MENSAJE_ENTREGADO", "id": 2, "a": "carro_2"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 2, "y": 1, "orientacion": "O"}, "carga": 2, "combustible": 46.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"pose": {"x": 5, "y": 1, "orientacion": "E"}, "carga": 3, "combustible": 46.0}}, {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 18.0}}, {"tipo": "CELDA_COSECHADA", "celda": [2, 1], "agente": "cosechadora_1", "cantidad": 1}, {"tipo": "CELDA_COSECHADA", "celda": [5, 1], "agente": "cosechadora_2", "cantidad": 1}, {"tipo": "RESTRICCION", "agente": "carro_2", "regla": "combustible_reserva", "detalle": "rechaza cosechadora_2#1: no le alcanza el combustible sin bajar de la reserva"}, {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 5, "nivel": 18.0}, {"tipo": "MENSAJE_ENVIADO", "id": 3, "tipo_mensaje": "SOLICITUD_SERVICIO", "performativa": "cfp", "de": "cosechadora_1", "a": "carro_1", "payload": {"servicio": "cosechadora_1#1", "x": 2, "y": 1, "carga": 2, "capacidad": 4}, "entrega_en": 3}, {"tipo": "MENSAJE_ENVIADO", "id": 4, "tipo_mensaje": "SOLICITUD_SERVICIO", "performativa": "cfp", "de": "cosechadora_1", "a": "carro_2", "payload": {"servicio": "cosechadora_1#1", "x": 2, "y": 1, "carga": 2, "capacidad": 4}, "entrega_en": 3}, {"tipo": "MENSAJE_ENVIADO", "id": 5, "tipo_mensaje": "PROPUESTA", "performativa": "propose", "de": "carro_1", "a": "cosechadora_2", "payload": {"servicio": "cosechadora_2#1", "costo": 6}, "entrega_en": 3}, {"tipo": "MENSAJE_ENVIADO", "id": 6, "tipo_mensaje": "RECHAZO", "performativa": "refuse", "de": "carro_2", "a": "cosechadora_2", "payload": {"servicio": "cosechadora_2#1", "motivo": "combustible"}, "entrega_en": 3}], "checksum": "ec6df0de764dedce"},
+    {"tick": 3, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 3, "a": "carro_1"}, {"tipo": "MENSAJE_ENTREGADO", "id": 4, "a": "carro_2"}, {"tipo": "MENSAJE_ENTREGADO", "id": 5, "a": "cosechadora_2"}, {"tipo": "MENSAJE_ENTREGADO", "id": 6, "a": "cosechadora_2"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 2, "y": 2, "orientacion": "S"}, "estado": "LLENA_ESPERANDO", "carga": 4, "combustible": 44.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"estado": "LLENA_ESPERANDO", "combustible": 45.5}}, {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 23.0}}, {"tipo": "CELDA_COSECHADA", "celda": [2, 2], "agente": "cosechadora_1", "cantidad": 2}, {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 5, "nivel": 23.0}, {"tipo": "MENSAJE_ENVIADO", "id": 7, "tipo_mensaje": "PROPUESTA", "performativa": "propose", "de": "carro_1", "a": "cosechadora_1", "payload": {"servicio": "cosechadora_1#1", "costo": 10}, "entrega_en": 4}, {"tipo": "MENSAJE_ENVIADO", "id": 8, "tipo_mensaje": "PROPUESTA", "performativa": "propose", "de": "carro_2", "a": "cosechadora_1", "payload": {"servicio": "cosechadora_1#1", "costo": 12}, "entrega_en": 5}], "checksum": "30637db4b9dbab79"},
+    {"tick": 4, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 7, "a": "cosechadora_1"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 43.5}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 45.0}}, {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 28.0}}, {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 5, "nivel": 28.0}, {"tipo": "MENSAJE_ENVIADO", "id": 9, "tipo_mensaje": "ACEPTACION", "performativa": "accept-proposal", "de": "cosechadora_2", "a": "carro_1", "payload": {"servicio": "cosechadora_2#1"}, "entrega_en": 5}], "checksum": "df463d2a1586d1fb"},
+    {"tick": 5, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 8, "a": "cosechadora_1"}, {"tipo": "MENSAJE_ENTREGADO", "id": 9, "a": "carro_1"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 43.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 44.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "YENDO_A_COSECHADORA", "combustible": 29.5}}, {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 30.0}}, {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 2.0, "nivel": 30.0}, {"tipo": "MENSAJE_ENVIADO", "id": 10, "tipo_mensaje": "ACEPTACION", "performativa": "accept-proposal", "de": "cosechadora_1", "a": "carro_1", "payload": {"servicio": "cosechadora_1#1"}, "entrega_en": 6}, {"tipo": "MENSAJE_ENVIADO", "id": 11, "tipo_mensaje": "RECHAZO_PROPUESTA", "performativa": "reject-proposal", "de": "cosechadora_1", "a": "carro_2", "payload": {"servicio": "cosechadora_1#1"}, "entrega_en": 6}], "checksum": "407fa7a3dafbd43d"},
+    {"tick": 6, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 10, "a": "carro_1"}, {"tipo": "MENSAJE_ENTREGADO", "id": 11, "a": "carro_2"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 42.5}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 44.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 1, "orientacion": "S"}, "combustible": 28.5}}], "checksum": "0213c00267d857a9"},
+    {"tick": 7, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 42.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 43.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 2, "y": 1, "orientacion": "E"}, "combustible": 27.5}}], "checksum": "83b69b6b65f2810a"},
+    {"tick": 8, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 41.5}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 43.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 3, "y": 1, "orientacion": "E"}, "combustible": 26.5}}], "checksum": "4d7a77793d51d15e"},
+    {"tick": 9, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 41.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 42.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 4, "y": 1, "orientacion": "E"}, "estado": "ESPERANDO_TRANSFERENCIA", "combustible": 25.5}}], "checksum": "0a16be494594a74b"},
+    {"tick": 10, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 40.5}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"estado": "TRANSFIRIENDO", "combustible": 42.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"combustible": 25.0}}], "checksum": "691ca33c9c6942f2"},
+    {"tick": 11, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 40.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"estado": "REGRESANDO_A_BASE", "carga": 0, "combustible": 41.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"carga": 3, "combustible": 24.5}}, {"tipo": "MENSAJE_ENVIADO", "id": 12, "tipo_mensaje": "TRANSFERENCIA_TERMINADA", "performativa": "inform", "de": "cosechadora_2", "a": "carro_1", "payload": {"servicio": "cosechadora_2#1", "cantidad": 3}, "entrega_en": 12}], "checksum": "671353651e39e91a"},
+    {"tick": 12, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 12, "a": "carro_1"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 39.5}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"pose": {"x": 5, "y": 0, "orientacion": "N"}, "combustible": 39.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "YENDO_A_COSECHADORA", "combustible": 24.0}}], "checksum": "95bc6bf63dc471af"},
+    {"tick": 13, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 39.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"pose": {"x": 4, "y": 0, "orientacion": "O"}, "estado": "FIN", "combustible": 42.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 3, "y": 1, "orientacion": "O"}, "combustible": 23.0}}, {"tipo": "RECARGA", "agente": "cosechadora_2", "cantidad": 5, "nivel": 42.5}], "checksum": "dd86c4a34196b1d0"},
+    {"tick": 14, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 38.5}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 47.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 2, "y": 1, "orientacion": "O"}, "estado": "ESPERANDO_TRANSFERENCIA", "combustible": 22.0}}, {"tipo": "RECARGA", "agente": "cosechadora_2", "cantidad": 5, "nivel": 47.5}], "checksum": "de35c44224d42937"},
+    {"tick": 15, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"estado": "TRANSFIRIENDO", "combustible": 38.0}}, {"tipo": "AGENTE", "id": "cosechadora_2", "set": {"combustible": 50.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"combustible": 21.5}}, {"tipo": "RECARGA", "agente": "cosechadora_2", "cantidad": 2.5, "nivel": 50.0}], "checksum": "4efa5cea18c64c5e"},
+    {"tick": 16, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 37.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"combustible": 21.0}}], "checksum": "2f21de5a69339be4"},
+    {"tick": 17, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"estado": "REGRESANDO_A_BASE", "carga": 0, "combustible": 37.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"carga": 7, "combustible": 20.5}}, {"tipo": "MENSAJE_ENVIADO", "id": 13, "tipo_mensaje": "TRANSFERENCIA_TERMINADA", "performativa": "inform", "de": "cosechadora_1", "a": "carro_1", "payload": {"servicio": "cosechadora_1#1", "cantidad": 4}, "entrega_en": 18}], "checksum": "a9352a87437dda1a"},
+    {"tick": 18, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 13, "a": "carro_1"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 36.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "YENDO_A_BODEGA", "combustible": 20.0}}], "checksum": "ee6b4d3fd6ad2126"},
+    {"tick": 19, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 2, "orientacion": "E"}, "combustible": 34.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 1, "orientacion": "O"}, "combustible": 19.0}}], "checksum": "a4744bd9257cbf4d"},
+    {"tick": 20, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 1, "orientacion": "N"}, "combustible": 32.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 0, "orientacion": "N"}, "combustible": 18.0}}], "checksum": "45d9e1c1d6dd1216"},
+    {"tick": 21, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 0, "orientacion": "N"}, "estado": "FIN", "combustible": 35.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 0, "y": 0, "orientacion": "O"}, "estado": "DESCARGANDO", "combustible": 17.0}}, {"tipo": "RECARGA", "agente": "cosechadora_1", "cantidad": 5, "nivel": 35.5}], "checksum": "caf210ab2c22b2a5"},
+    {"tick": 22, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 40.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"combustible": 16.5}}, {"tipo": "RECARGA", "agente": "cosechadora_1", "cantidad": 5, "nivel": 40.5}], "checksum": "89a5c57016c8702a"},
+    {"tick": 23, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 45.5}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "REGRESANDO_A_BASE", "carga": 0, "combustible": 16.0}}, {"tipo": "DEPOSITO", "agente": "carro_1", "cantidad": 7, "entregado_total": 7}, {"tipo": "RECARGA", "agente": "cosechadora_1", "cantidad": 5, "nivel": 45.5}], "checksum": "eb8731c9ed0067aa"},
+    {"tick": 24, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"combustible": 50.0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 0, "orientacion": "E"}, "estado": "EN_BASE", "combustible": 20.0}}, {"tipo": "RECARGA", "agente": "cosechadora_1", "cantidad": 4.5, "nivel": 50.0}, {"tipo": "RECARGA", "agente": "carro_1", "cantidad": 5, "nivel": 20.0}], "checksum": "8975c87d5e9e24d2"}
+  ],
+  "metricas": {}
+}

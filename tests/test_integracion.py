@@ -1,9 +1,12 @@
 """Corridas completas de extremo a extremo.  [Dueño: Ilan]
 
-Activos desde la integración del 17 de noviembre: corren la simulación real con los tres escenarios.
+Corren la simulación real. Las reglas R1–R9 se revisan en los seis escenarios (A–F) con la línea base, y
+en D, E y F también con las cuatro estrategias. Las pruebas de la segunda entrega (spec §16) están al final.
 """
 
+import json
 import math
+from functools import lru_cache
 from pathlib import Path
 import pytest
 
@@ -16,9 +19,12 @@ from harvest_sim.datos import (
     validar_trace,
     verificar_checksums,
 )
+from harvest_sim.datos.campo import rendimiento
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
-ESCENARIOS = ["escenario_a", "escenario_b", "escenario_c"]
+ESCENARIOS = ["escenario_a", "escenario_b", "escenario_c", "escenario_d", "escenario_e", "escenario_f"]
+NUEVOS = ["escenario_d", "escenario_e", "escenario_f"]
+ESTRATEGIAS = ["base", "subasta", "anticipada", "anticipada_plus"]
 
 
 def obtener_trace(nombre: str) -> dict:
@@ -31,10 +37,24 @@ def obtener_trace(nombre: str) -> dict:
     return ejecutar(config)
 
 
-@pytest.fixture(scope="module", params=ESCENARIOS)
+@lru_cache(maxsize=None)
+def corrida(nombre: str, estrategia: str = "base", seed: int | None = None) -> dict:
+    """Una corrida de un escenario con una estrategia y una seed (en caché: varias pruebas la comparten)."""
+    from harvest_sim.datos.experimentos import aplicar_estrategia, simulador_real
+
+    config = aplicar_estrategia(json.loads((CONFIG_DIR / f"{nombre}.json").read_text(encoding="utf-8")), estrategia)
+    if seed is not None:
+        config["seed"] = seed
+    return simulador_real(config)
+
+
+CASOS = [(n, "base") for n in ESCENARIOS] + [(n, e) for n in NUEVOS for e in ESTRATEGIAS if e != "base"]
+
+
+@pytest.fixture(scope="module", params=CASOS, ids=lambda c: f"{c[0]}-{c[1]}")
 def trace(request):
-    """Fixture que produce el log de una corrida real para cada escenario."""
-    return obtener_trace(request.param)
+    """Fixture que produce el log de una corrida real para cada escenario (y estrategia en D, E y F)."""
+    return corrida(*request.param)
 
 
 def test_no_comparten_celda(trace):
@@ -97,10 +117,11 @@ def test_un_paso_por_tick(trace):
 
 
 def test_conservacion_de_grano(trace):
-    """R7: grano cosechado = grano en cosechadora + grano en carro + grano entregado, en CADA tick."""
-    grano_por_celda = trace["mundo"]["grano_por_celda"]
+    """R7: grano cosechado = grano en cosechadoras + grano en carros + grano entregado, en CADA tick
+    (con rendimiento variable, usando el rendimiento de cada celda)."""
     for est in reconstruir(trace):
-        cosechado = len(est["celdas_cosechadas"]) * grano_por_celda
+        # con rendimiento variable cada celda vale lo que dice mundo.rendimiento (o grano_por_celda)
+        cosechado = sum(rendimiento(trace["mundo"], tuple(c)) for c in est["celdas_cosechadas"])
         cargas = sum(
             a_data.get("carga", 0) if isinstance(a_data.get("carga"), int) else a_data.get("carga", {}).get("actual", 0)
             for a_data in est["agentes"].values()
@@ -205,14 +226,16 @@ def test_mensaje_pendiente_no_se_pierde(trace):
         )
 
 
-def test_mensajes_viajan_al_tick_siguiente(trace):
-    """En el log, entrega_en == tick_envio + 1 para todos los mensajes enviados."""
+def test_retraso_mensajes(trace):
+    """Sin retraso configurado, entrega_en == tick_envio + 1; con retraso, en [t+1, t+1+máximo] (§8)."""
+    retraso = trace["config"].get("incertidumbre", {}).get("retraso_mensajes", {"probabilidad": 0, "maximo": 0})
+    maximo = retraso["maximo"] if retraso["probabilidad"] > 0 else 0
     for tick_info in trace["ticks"]:
         t = tick_info["tick"]
         for cambio in tick_info.get("cambios", []):
             if cambio.get("tipo") == "MENSAJE_ENVIADO":
-                assert cambio["entrega_en"] == t + 1, (
-                    f"Mensaje {cambio['id']} enviado en tick {t} tiene entrega_en {cambio['entrega_en']} != {t + 1}"
+                assert t + 1 <= cambio["entrega_en"] <= t + 1 + maximo, (
+                    f"Mensaje {cambio['id']} enviado en tick {t} tiene entrega_en {cambio['entrega_en']}"
                 )
 
 
@@ -220,7 +243,7 @@ def test_checksum_de_todo_el_log(trace):
     """verificar_checksums(trace) es True y validar_trace(trace) no arroja errores."""
     assert verificar_checksums(trace) is True, "Los checksums SHA-256 del trace no coinciden"
     errores = validar_trace(trace)
-    assert errores == [], f"El trace no cumple el contrato del esquema 2.1: {errores}"
+    assert errores == [], f"El trace no cumple el contrato del esquema: {errores}"
 
 
 @pytest.mark.parametrize("nombre", ESCENARIOS)
@@ -257,3 +280,137 @@ def test_cambios_reconstruyen_el_mapa(trace):
 
     assert len(cosechadas_list) == len(cosechadas_set), "Se cosecharon celdas duplicadas en el campo"
     assert cosechadas_set == esperadas, "Las celdas cosechadas al final no coinciden exactamente con el campo"
+
+
+
+# ---------------------------------------------------------------------------------------------------
+# Segunda entrega (especificación §16)
+# ---------------------------------------------------------------------------------------------------
+
+def _eventos(trace, tipo):
+    for tick_info in trace["ticks"]:
+        for cambio in tick_info.get("cambios", []):
+            if cambio.get("tipo") == tipo:
+                yield tick_info["tick"], cambio
+
+
+def test_no_entra_a_obstaculo(trace):
+    """R10: ningún agente está en una celda con obstáculo, en ningún tick."""
+    obstaculos = {tuple(c) for c in trace["mundo"].get("obstaculos", [])}
+    for est in reconstruir(trace):
+        for a_id, a_data in est["agentes"].items():
+            pos = (a_data["pose"]["x"], a_data["pose"]["y"])
+            assert pos not in obstaculos, f"R10 violada: {a_id} en el obstáculo {pos} en el tick {est['tick']}"
+
+
+def test_combustible_nunca_negativo(trace):
+    """R11: el combustible de cada agente nunca es negativo ni pasa del tanque."""
+    tanques = trace["config"]["combustible"]
+    for est in reconstruir(trace):
+        for a_id, a_data in est["agentes"].items():
+            if "combustible" in a_data:
+                tanque = tanques["tanque_cosechadora" if a_id.startswith("cosechadora") else "tanque_carro"]
+                assert 0 <= a_data["combustible"] <= tanque, f"{a_id} con {a_data['combustible']} L en {est['tick']}"
+
+
+def test_recargas_solo_en_base(trace):
+    """Cada RECARGA ocurre con el agente en su base y en EN_BASE o FIN (§9)."""
+    estados = {e["tick"]: e for e in reconstruir(trace)}
+    for tick, evento in _eventos(trace, "RECARGA"):
+        agente = estados[tick]["agentes"][evento["agente"]]
+        assert [agente["pose"]["x"], agente["pose"]["y"]] == trace["mundo"]["bases"][evento["agente"]]
+        assert agente["estado"] in ("EN_BASE", "FIN")
+
+
+def _servicios(trace):
+    """{servicio: [(tick, tipo_mensaje, de, a), ...]} de los mensajes de la subasta."""
+    servicios = {}
+    for tick, e in _eventos(trace, "MENSAJE_ENVIADO"):
+        servicio = e["payload"].get("servicio")
+        if servicio is not None:
+            servicios.setdefault(servicio, []).append((tick, e["tipo_mensaje"], e["de"], e["a"]))
+    return servicios
+
+
+@pytest.mark.parametrize("nombre", NUEVOS)
+@pytest.mark.parametrize("estrategia", ["subasta", "anticipada", "anticipada_plus"])
+def test_subasta_secuencia(nombre, estrategia):
+    """Cada servicio: un cfp por carro; a lo más una respuesta por carro; si hubo propuestas, una sola
+    aceptación (al menor costo, empate por id) y un reject a cada uno de los demás que propusieron; el
+    inform final va al aceptado. Performativas e ids correctos."""
+    trace = corrida(nombre, estrategia)
+    carros = [a["id"] for a in trace["agentes"] if a["tipo"] == "carro"]
+    servicios = _servicios(trace)
+    assert servicios, "la subasta debe generar servicios"
+    costos = {}
+    for _, e in _eventos(trace, "MENSAJE_ENVIADO"):
+        if e["tipo_mensaje"] == "PROPUESTA":
+            costos[(e["payload"]["servicio"], e["de"])] = e["payload"]["costo"]
+    for servicio, mensajes in servicios.items():
+        tipos = [m[1] for m in mensajes]
+        cfp = [m for m in mensajes if m[1] == "SOLICITUD_SERVICIO"]
+        assert sorted(m[3] for m in cfp) == sorted(carros), servicio
+        respuestas = [m[2] for m in mensajes if m[1] in ("PROPUESTA", "RECHAZO")]
+        assert len(respuestas) == len(set(respuestas)), servicio
+        propusieron = {m[2] for m in mensajes if m[1] == "PROPUESTA"}
+        aceptados = [m[3] for m in mensajes if m[1] == "ACEPTACION"]
+        assert len(aceptados) <= 1, servicio
+        if aceptados:
+            ganador = aceptados[0]
+            assert ganador == min(propusieron, key=lambda c: (costos[(servicio, c)], int(c.rsplit("_", 1)[1])))
+            assert sorted(m[3] for m in mensajes if m[1] == "RECHAZO_PROPUESTA") == sorted(propusieron - {ganador})
+        assert tipos.count("TRANSFERENCIA_TERMINADA") <= 1
+    performativas = {"SOLICITUD_SERVICIO": "cfp", "PROPUESTA": "propose", "RECHAZO": "refuse",
+                     "ACEPTACION": "accept-proposal", "RECHAZO_PROPUESTA": "reject-proposal",
+                     "TRANSFERENCIA_TERMINADA": "inform", "LLENA": "request"}
+    ids = [e["id"] for _, e in _eventos(trace, "MENSAJE_ENVIADO")]
+    assert ids == sorted(ids) and len(ids) == len(set(ids))
+    assert all(e["performativa"] == performativas[e["tipo_mensaje"]] for _, e in _eventos(trace, "MENSAJE_ENVIADO"))
+
+
+@pytest.mark.parametrize("nombre", NUEVOS)
+@pytest.mark.parametrize("estrategia", ["subasta", "anticipada", "anticipada_plus"])
+def test_transferencia_solo_contratado(nombre, estrategia):
+    """Cada TRANSFERENCIA_TERMINADA de la subasta va al carro aceptado en ese servicio."""
+    trace = corrida(nombre, estrategia)
+    for servicio, mensajes in _servicios(trace).items():
+        aceptado = [m[3] for m in mensajes if m[1] == "ACEPTACION"]
+        for m in mensajes:
+            if m[1] == "TRANSFERENCIA_TERMINADA":
+                assert aceptado and m[3] == aceptado[0], f"{servicio}: transfirió con {m[3]}, aceptado {aceptado}"
+
+
+@pytest.mark.parametrize("estrategia", ESTRATEGIAS)
+@pytest.mark.parametrize("seed", range(20))
+def test_pasillo_sin_colisiones_ni_bloqueos(estrategia, seed):
+    """Escenario E (muro con un hueco, 2 + 2 agentes): termina, 0 colisiones y ningún BLOQUEO, en las cuatro
+    estrategias y 20 seeds."""
+    trace = corrida("escenario_e", estrategia, seed)
+    assert trace["metricas"]["colisiones"] == 0
+    assert not list(_eventos(trace, "BLOQUEO"))
+    assert trace["metricas"]["porcentaje_entregado"] == 100.0
+
+
+def test_semilla_reproducible():
+    """F (con incertidumbre): misma seed, mismo texto del trace; seeds distintas, traces distintos."""
+    a = texto_del_trace(corrida("escenario_f", "anticipada", 3))
+    corrida.cache_clear()
+    assert texto_del_trace(corrida("escenario_f", "anticipada", 3)) == a
+    assert texto_del_trace(corrida("escenario_f", "anticipada", 4)) != a
+
+
+def test_f_activa_combustible_y_retraso():
+    """F está calibrado para estresar: hay recargas, restricciones por la reserva, rendimiento variable y
+    mensajes que llegan tarde."""
+    trace = corrida("escenario_f", "subasta")
+    reglas = [e["regla"] for _, e in _eventos(trace, "RESTRICCION")]
+    assert list(_eventos(trace, "RECARGA")) and "combustible_reserva" in reglas
+    assert "rendimiento" in trace["mundo"]
+    assert any(e["entrega_en"] > t + 1 for t, e in _eventos(trace, "MENSAJE_ENVIADO"))
+
+
+def test_restricciones_de_ruta_registradas():
+    """Las rutas en el tiempo registran las reglas que cambian decisiones (§10): en E, el muro (R10) y las
+    celdas ocupadas o reservadas (R3)."""
+    reglas = {e["regla"] for estrategia in ESTRATEGIAS for _, e in _eventos(corrida("escenario_e", estrategia), "RESTRICCION")}
+    assert {"R10_obstaculo", "R3_celda_ocupada"} <= reglas

@@ -136,6 +136,16 @@ def test_grafica_de_sensibilidad(plots, tmp_path):
                                              tmp_path / "sens.png"))
 
 
+def test_grafica_de_sensibilidad_con_varias_estrategias(plots, tmp_path):
+    """Con dos estrategias en el barrido hay una línea por estrategia (antes se mezclaban en una sola)."""
+    filas = [{"escenario": "d", "estrategia": e, "capacidad_carro": c, "tiempo_ocioso_total": v}
+             for e, c, v in [("base", 8, 331), ("base", 16, 331), ("anticipada_plus", 8, 313),
+                             ("anticipada_plus", 16, 199)]]
+    resumen = resumen_por_grupo(filas, ["capacidad_carro"], ["tiempo_ocioso_total"])
+    assert len({(f["estrategia"], f["capacidad_carro"]) for f in resumen}) == 4
+    assert es_png(plots.grafica_sensibilidad(resumen, "capacidad_carro", "tiempo_ocioso_total", tmp_path / "s.png"))
+
+
 def test_main_genera_graficas_comparacion_y_tabla(plots, tmp_path, capsys):
     base = cargar_trace(FIXTURE)
     rutas = []
@@ -154,3 +164,26 @@ def test_main_genera_graficas_comparacion_y_tabla(plots, tmp_path, capsys):
     # --agente con un id que no es cosechadora: error claro y código 2
     assert plots.main(rutas[:1] + ["--salida", str(tmp_path / "otra"), "--agente", "carro_1"]) == 2
     assert "no es una cosechadora" in capsys.readouterr().err
+
+
+def test_grafica_de_combustible_con_el_trace_2_2(plots, tmp_path):
+    """El trace de ejemplo 2.2 trae combustible: sale la gráfica 7; el fixture 2.1 no la genera."""
+    ejemplo = FIXTURE.parent / "trace_ejemplo_22.json"
+    rutas = plots.graficas_de_un_trace(ejemplo, tmp_path / "con")
+    assert rutas[-1].name == "7_combustible.png" and all(es_png(r) for r in rutas)
+    assert len(plots.graficas_de_un_trace(FIXTURE, tmp_path / "sin")) == 6
+    with pytest.raises(ValueError, match="no trae combustible"):
+        plots.grafica_combustible(cargar_trace(FIXTURE), tmp_path / "x.png")
+
+
+def test_graficas_de_estrategias(plots, tmp_path):
+    from harvest_sim.datos.experimentos import ablacion_costo, comparar_contra_base, resumen_por_grupo  # noqa: F401
+    filas = [{"escenario": esc, "estrategia": e, "seed": s, "tiempo_ocioso_total": base - d + s,
+              "tiempo_completacion": 100 + s, "costo_total": 6 * (base - d + s), "costo_ocio": 5 * (base - d + s),
+              "costo_tiempo": base - d + s}
+             for esc, base in (("escenario_d", 30), ("escenario_e", 40))
+             for e, d in (("base", 0), ("subasta", 2), ("anticipada", 8)) for s in (0, 1, 2)]
+    resumen = resumen_por_grupo(filas)
+    assert es_png(plots.grafica_estrategias(resumen, tmp_path / "estrategias.png"))
+    assert es_png(plots.grafica_costo_j(filas, tmp_path / "costo.png"))
+    assert es_png(plots.grafica_diferencias(comparar_contra_base(filas), tmp_path / "dif.png"))

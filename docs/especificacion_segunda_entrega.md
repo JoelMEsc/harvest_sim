@@ -69,12 +69,12 @@ Todas las secciones nuevas son **opcionales**: si faltan, se usan los valores po
 | `politica.umbral_aviso` | 0 < u ≤ 1 | 1.0 | Fracción de la capacidad a la que la cosechadora pide el carro |
 | `politica.atender_desde_bodega` | bool | false | true: el carro atiende su siguiente servicio sin regresar a la base |
 | `politica.encadenar_servicios` | bool | false | true: si le cabe, el carro atiende otro servicio antes de ir a la bodega |
-| `politica.espera_propuestas` | entero ≥ 2 | 2 | Ticks que la cosechadora espera propuestas (más el retraso máximo de mensajes) |
+| `politica.espera_propuestas` | entero ≥ 2 | 2 | Ticks que la cosechadora espera propuestas (más 2 × el retraso máximo de mensajes: ida y vuelta) |
 | `politica.reintento_subasta` | entero ≥ 1 | 3 | Ticks antes de repetir una subasta sin propuestas |
 | `incertidumbre.rendimiento` | 1 ≤ mínimo ≤ máximo | 1, 1 (= `grano_por_celda`) | Grano por celda, sorteado al crear el mundo |
 | `incertidumbre.duracion_extra_maxima` | entero ≥ 0 | 0 | Ticks extra sorteados en cada transferencia y descarga |
 | `incertidumbre.retraso_mensajes` | 0 ≤ p ≤ 1, máximo ≥ 0 | 0, 0 | Probabilidad de que un mensaje llegue tarde y cuántos ticks como máximo |
-| `combustible.*` | números > 0; reserva en [0, 1) | tanques enormes (nunca recargan) | Consumo en litros; `tasa_recarga` 0 = recarga instantánea |
+| `combustible.*` | números > 0; reserva en [0, 1) | tanques enormes (la reserva nunca se activa; sí hay `RECARGA` al volver a la base) | Consumo en litros; `tasa_recarga` 0 = recarga instantánea |
 | `costo.pesos` | números ≥ 0 | los de arriba | Solo afectan al cálculo de J (§11) |
 
 **Las cuatro estrategias que se comparan** (todas con los mismos escenarios y semillas):
@@ -132,14 +132,14 @@ La cosechadora es el **administrador** del servicio y los carros son los **contr
 |---|---|---|---|---|
 | 1. Llamada | `SOLICITUD_SERVICIO` | `cfp` | cosechadora → cada carro | `servicio`, `x`, `y`, `carga`, `capacidad` |
 | 2a. Oferta | `PROPUESTA` | `propose` | carro → cosechadora | `servicio`, `costo` (ticks estimados hasta llegar) |
-| 2b. Rechazo | `RECHAZO` | `refuse` | carro → cosechadora | `servicio`, `motivo` (`"sin_capacidad"`, `"combustible"`) |
+| 2b. Rechazo | `RECHAZO` | `refuse` | carro → cosechadora | `servicio`, `motivo` (`"sin_capacidad"`, `"combustible"`, `"sin_ruta"`) |
 | 3a. Adjudicación | `ACEPTACION` | `accept-proposal` | cosechadora → ganador | `servicio` |
 | 3b. Descarte | `RECHAZO_PROPUESTA` | `reject-proposal` | cosechadora → los demás | `servicio` |
 | 4. Fin | `TRANSFERENCIA_TERMINADA` | `inform` | cosechadora → ganador | `servicio`, `cantidad` |
 
 - **Costo de la oferta:** ticks estimados para que el carro llegue junto a la cosechadora = duración restante de su fila de servicios (traslados, transferencias y descargas, con las tasas) + distancia BFS desde donde quedará al terminar esa fila (la bodega si `atender_desde_bodega`, si no su base) hasta la cosechadora. Función `rutas.estimar_costo` (Oswaldo).
 - **Rechazo:** si el carro no tendría combustible para ir, transferir, descargar y volver respetando la reserva, o si nunca le cabría la carga.
-- **Decisión:** la cosechadora espera `espera_propuestas + retraso máximo de mensajes` ticks desde la llamada, elige el **menor costo** (empate: menor id) y avisa a todos. Si no hubo propuestas, repite la llamada después de `reintento_subasta` ticks.
+- **Decisión:** la cosechadora espera `espera_propuestas + 2 × retraso máximo de mensajes` ticks desde la llamada (se pueden retrasar la llamada y la respuesta), elige el **menor costo** (empate: menor id) y avisa a todos. Si no hubo propuestas, repite la llamada después de `reintento_subasta` ticks.
 - **Lectura del buzón:** en modo subasta los carros leen su buzón **en cada tick**, en cualquier estado (en la línea base solo en `EN_BASE`).
 - **Modo `directa` (línea base):** se conserva `LLENA` (`request`) al carro asignado, como en la primera entrega.
 
@@ -194,7 +194,7 @@ Solo agrega campos a la 2.1. El validador acepta 2.1 y 2.2.
 |---|---|
 | `schema_version` | `"2.2"` |
 | `AGENTE.set.combustible` | Nuevo campo permitido (número ≥ 0) |
-| `CELDA_COSECHADA.cantidad` | Grano obtenido en esa celda (entero ≥ 1) |
+| `CELDA_COSECHADA.cantidad` | Grano obtenido en esa celda (entero ≥ 1). Opcional: si falta, vale el rendimiento de `mundo.rendimiento` o `grano_por_celda` |
 | `mundo.rendimiento` | Opcional: matriz alto × ancho con el grano de cada celda (0 en servicio y obstáculos). Si falta, todas valen `grano_por_celda` |
 | `RECARGA` | Evento nuevo: `agente`, `cantidad`, `nivel` (categoría 2) |
 | `RESTRICCION` | Evento nuevo: `agente`, `regla`, `detalle` (categoría 2) |

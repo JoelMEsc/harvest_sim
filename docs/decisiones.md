@@ -167,3 +167,70 @@ Formato por entrada:
 - **Alternativa considerada:** carro libre más cercano o fila global; seguir recalculando rutas ante celdas ocupadas; combustible solo desde el log; aprendizaje por refuerzo; traer Unity a este repositorio.
 - **Por qué se descartó:** la subasta es un protocolo de comunicación entre agentes (tema del curso) y decide con información local de cada carro; recalcular provoca bloqueos mutuos en pasillos; el combustible debe influir en las decisiones para ser una restricción real; el aprendizaje por refuerzo no cabe con una línea base aún creciendo y la rúbrica acepta un costo descompuesto; Unity en otro repositorio mantiene ligero este y permite ciclos de trabajo separados.
 - **Afecta a:** todos (ver `docs/especificacion_segunda_entrega.md` y `docs/equipo/`).
+
+## 2026-11-23 — Rutas en el tiempo y carro contratista: casos no especificados
+- **Estado:** DECIDIDO.
+- **Quién:** Oswaldo (Rutas y carro)
+- **Decisión:**
+  1. **Convención de tiempo:** `(celda, t)` = dónde está el agente al final del tick `t`. En el paso del tick `t` se llama `rutas.bfs_tiempo(pos, destino, t − 1, ...)`; el primer elemento de la ruta es la celda del tick `t`. Cada agente reserva con `mundo.reservar` desde `(pos, t)`.
+  2. **`bfs_tiempo` sin límite artificial:** después del horizonte los estados se colapsan a uno por celda (BFS normal), así que la búsqueda siempre termina y no corta rutas largas. Orden de expansión: esperar, N, E, S, O.
+  3. **Llegada con permanencia:** solo se llega al destino si nadie más lo tiene reservado mientras el agente se queda (`permanencia`; `None` = todo el horizonte). En la bodega la permanencia es la descarga, y se reserva completa aunque pase del horizonte. Parámetro opcional de `bfs_tiempo` y `reservas_de_ruta`; la firma de la guía no cambia.
+  4. **Reglas del carro para no esperarse para siempre:** primer paso nunca a una celda ocupada (R3 conservadora); compromiso con el plan vigente (solo lo cambia por uno que llegue antes); reserva hasta `tick + H + 1`; mientras descarga reserva también su salida; a los agentes quietos se les supone en su celda todo el horizonte; un carro encerrado le pide paso a un carro en viaje que esté en su camino (gana el id menor). Detalle en `docs/equipo/oswaldo/carro.md` §12.
+  5. **Estimaciones deterministas:** el costo de la oferta y el combustible estimado usan `ceil(cantidad / tasa)`, no `mundo.duracion` (que sortea el extra aleatorio y cambiaría la secuencia del generador).
+  6. **Encadenar con la capacidad, no con la carga anunciada:** con despacho anticipado la cosechadora sigue cosechando hasta llenarse.
+  7. **Tipos de mensaje por texto:** el carro compara `tipo` por su valor (`"PROPUESTA"`, …) y crea los mensajes con `TipoMensaje(texto)`; no depende del orden en que se integren el buzón y el carro. Motivo extra de rechazo `"sin_ruta"` si la cosechadora es inalcanzable (no debería pasar).
+  8. **`registro()`** agrega `combustible` solo cuando el mundo ya lo puso (`carro.combustible` no es `None`).
+  9. **Limitación conocida:** con 3 carros o más, la bodega con una sola entrada (carro_1 estacionado en `(1, 0)`) puede dejar a dos carros esperándose; en la prueba de estrés pasó en 36 de 520 corridas con 3 carros y en 0 de 608 con 2. Los escenarios de la entrega usan como máximo 2 carros.
+- **Alternativa considerada:** límite de `4 × (ancho + alto)` ticks; tratar la bodega como estacionamiento (quedarse todo el horizonte); replanear desde cero en cada tick; estimar con `mundo.duracion`; agregar los tipos de mensaje al enum desde la rama del carro.
+- **Por qué se descartó:** el límite puede cortar rutas válidas; la bodega como estacionamiento y el replaneo sin compromiso producían esperas mutuas sin fin en la prueba de estrés (dos carros siguiéndose por un pasillo); `mundo.duracion` consume números aleatorios; el enum es de Emilio.
+- **Afecta a:** Emilio (la cosechadora usa `bfs_tiempo` y `reservas_de_ruta` con la misma convención de tiempo, y debe reservar su celda cuando está quieta), Carlos (`mundo.reservar` debe reemplazar las reservas del agente desde el primer tick de la lista; `mundo.posicion` y `mundo.estado_de` para todos los ids del §3), Ilan (prueba del pasillo), Joel (`combustible` en el registro).
+
+## 2026-11-24 — Datos de la segunda entrega: formato 2.2, métricas nuevas, comparación pareada y servidor
+- **Estado:** DECIDIDO.
+- **Quién:** Joel (Datos)
+- **Decisión:**
+  1. **Formato 2.2** en `datos/formato.py`: 7 tipos de mensaje con su performativa, claves obligatorias de cada payload (error si faltan), motivos de rechazo (`sin_capacidad`, `combustible`, `sin_ruta`) y reglas de `RESTRICCION`; un motivo o una regla desconocidos son **aviso**, no error. `combustible` en el registro es opcional (solo si la simulación lo modela). `CELDA_COSECHADA.cantidad` es opcional: si falta, se usa el rendimiento de la celda. El validador acepta 2.1 y 2.2 y toma el retraso máximo de mensajes de la configuración del trace.
+  2. **Métricas nuevas** (al final, sin cambiar las de v0.1): `tiempo_ocioso_total`; combustible usado = inicial − final + recargado, comprado = inicial + recargado, recargas y mínimo (al final de cada tick); restricciones por regla y por agente; servicios, propuestas por servicio, rechazos por motivo y respuesta promedio (ticks desde la primera llamada de un servicio hasta que empieza su transferencia); servicios ganados por carro.
+  3. **`num_ciclos`** pasa a contar transferencias terminadas: en la línea base es igual al número de `LLENA` y sigue siendo correcto con la subasta.
+  4. **Costo J** = suma de peso · valor de cada término (tiempo, distancia, colisiones, ocio total, combustible usado, restricciones), con los pesos de `config.costo.pesos` o los por defecto; cada término se reporta por separado.
+  5. **Comparación pareada por seed** contra `base`: diferencia estrategia − base seed por seed, IC 95 % con t de Student y veredicto (mejora, empeora, igual, no concluyente si el IC cruza el 0, informativa). **Ablación de J**: orden de las estrategias con cada término quitado.
+  6. **Traces de ejemplo 2.2** escritos como guion (`tools/traces_ejemplo_22.py`), no extendiendo el generador.
+  7. **Servidor FastAPI** con simulador inyectable y modo de ejemplo; dependencias fijas (fastapi 0.115.6, uvicorn 0.32.1, httpx 0.28.1).
+- **Alternativa considerada:** `cantidad` obligatoria en 2.2; comparar medias sin emparejar; extender el generador con la subasta; contar `num_ciclos` como mensajes `LLENA`.
+- **Por qué se descartó:** `cantidad` obligatoria rompía las corridas mientras `mundo.cosechar` no la envíe; sin emparejar, la variación entre seeds ensancha los intervalos; el generador duplicaría la lógica de Emilio y Oswaldo; con la subasta no hay `LLENA` y la métrica valdría 0.
+- **Afecta a:** Emilio y Oswaldo (importar tipos y performativas de `datos.formato`), Carlos (`cantidad` y `combustible` opcionales), Mario Giovanni (traces de ejemplo, servidor, `ESTRATEGIAS`), Ilan (dependencias del CI).
+
+## 2026-11-24 — Mundo de la segunda entrega: franjas, reservas, rendimiento y combustible
+- **Estado:** DECIDIDO.
+- **Quién:** Joel, en nombre de Carlos (Mundo).
+- **Decisión:**
+  1. **Secciones opcionales:** `cargar_config` exige solo los campos de la primera entrega. `politica`, `incertidumbre`, `combustible` y `costo` se completan con sus valores por defecto (también los dicts anidados) y rechazan las claves desconocidas. Los defectos de `politica` viven en `config.POLITICA_POR_DEFECTO`, y los pesos de J en `datos.metricas.PESOS_COSTO`, que es la única fuente.
+  2. **Rendimiento por defecto = `grano_por_celda`.** La regla del múltiplo de la capacidad se exige solo con rendimiento fijo. La matriz `rendimiento` va en la descripción solo si alguna celda da distinto de `grano_por_celda`.
+  3. **Franjas:** cada corte va después de la fila cuyo acumulado de celdas libres queda más cerca de k·N/m; en empate, la franja de arriba se queda con la fila. Resultados: D da 40/30 y E da 28/27. La serpentina usa la paridad global (fila impar: x creciente), así que con una cosechadora es la de v0.1. Nueva validación: `alto − 1 ≥ num_cosechadoras`.
+  4. **Reservas:** `reservar` reemplaza las del agente desde el primer tick de la lista. Si otro ya tiene esa `(celda, tick)`, gana quien reservó primero (el orden del tick). `nuevo_tick` olvida las pasadas.
+  5. **Recarga con los tanques por defecto:** los agentes recargan al volver a su base aunque el tanque sea enorme (la regla del §9 no distingue). A, B y C tienen ahora eventos `RECARGA` y `combustible` en el log, pero **ninguna métrica de v0.1 cambia** (`test_regresion`). Se corrigió en la especificación el texto «nunca recargan».
+  6. **Buzón:** en esta rama, `ejecutar` crea `Buzon()`; el buzón con retraso llega con la parte de mensajes.
+- **Alternativa considerada:** no registrar combustible cuando la sección falta; sobrescribir la reserva de otro agente; franjas por número de filas.
+- **Por qué se descartó:** dos comportamientos según si la sección existe confunden y complican las métricas; sobrescribir en silencio permite choques; contar filas ignora los obstáculos (en E, la fila del muro tiene una sola celda).
+- **Afecta a:** Emilio (`camino`, `rendimiento`, `duracion`, `combustible_para`, `reservar`), Oswaldo (la API que su carro ya usa), Ilan (pruebas de `test_mundo` y `test_config`), Joel (combustible y `RECARGA` en el log).
+
+## 2026-11-24 — Buzón con retraso y cosechadora administradora: casos no especificados
+- **Estado:** DECIDIDO.
+- **Quién:** Joel, en nombre de Emilio (mensajes y cosechadora).
+- **Decisión:**
+  1. **Reintento = servicio nuevo** (`#n + 1`). Así cada servicio tiene exactamente un cfp por carro.
+  2. **Espera de propuestas:** `espera_propuestas + 2 × retraso máximo`, porque se pueden retrasar la llamada y la respuesta. Se corrigió el texto de la especificación.
+  3. **La llamada se evalúa justo después de cosechar**, en el mismo tick (como el `LLENA` de v0.1). Si se evaluara al inicio del paso siguiente, la subasta saldría un tick tarde frente a la base.
+  4. **En `FIN` la cosechadora sigue vaciando su buzón:** un mensaje viejo sin leer deja `hay_pendientes` en verdadero y la simulación nunca termina.
+  5. **Sin estados nuevos:** ir a recargar usa `REGRESANDO_A_BASE` y `EN_BASE` (el validador, el visor y Unity solo conocen los 7 estados).
+  6. **Combustible de la cosechadora:**
+     - tras cada transferencia estima solo la siguiente carga; con todo lo que falta del camino, un tanque chico nunca alcanzaría;
+     - la espera estimada es la mayor entre la teórica y la última que vivió, y el regreso lleva un margen del 25 %;
+     - **regreso de emergencia:** si mientras cosecha o espera ya solo le alcanza para volver respetando la reserva, regresa (con el grano) y vuelve a su lugar después de recargar. No lo hace si ya tiene un carro en camino (contratado, o el asignado al que avisó con `LLENA`), porque ese carro la seguiría hasta su base y se estorbarían.
+  7. **Rutas en el tiempo de la cosechadora:** usa las mismas reglas del carro (`docs/equipo/oswaldo/carro.md` §12): compromiso con el plan anterior, y los agentes quietos se suponen en su celda todo el horizonte. Una espera porque la siguiente celda está ocupada es `RESTRICCION R3` (una por espera) y solo es `BLOQUEO` si dura más que el horizonte. En la línea base (1 + 1, directa) se conserva el código de v0.1.
+  8. **Carro (en nombre de Oswaldo):** con el tanque lleno ya no rechaza por combustible. En un mapa donde el viaje no alcanza ni con el tanque lleno, rechazar siempre dejaba a la cosechadora llamando para siempre (pasó en F).
+  9. **Escenario F:** tanques de 100 L (cosechadora) y 60 L (carro). Con 60 y 40 L, una cosechadora en la esquina lejana no completaba ni una carga más el regreso. Las 80 corridas de F (4 estrategias × 20 seeds) terminan, y cada una tiene al menos 8 restricciones `combustible_reserva` y al menos 115 eventos `RECARGA`.
+- **Alternativa considerada:** reintentar con el mismo id; estimar todo el camino; un estado `RECARGANDO`; dejar que el carro rechace siempre que no alcance.
+- **Por qué se descartó:** rompe «un cfp por servicio»; con tanques chicos la cosechadora nunca saldría; los consumidores del log lo rechazarían; ciclo infinito de subastas.
+- **Limitación conocida:** en F todavía hay unos pocos ticks con un tanque en 0 L (9 en unos 40,000 ticks, al esperar mucho a un carro ya en camino). R11 se cumple (nunca negativo) y queda un aviso en el log de consola.
+- **Afecta a:** Oswaldo (regla 8), Ilan (pruebas de integración de D, E y F), Joel (experimentos).
