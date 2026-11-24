@@ -25,7 +25,8 @@ def ejecutar(config: Config) -> dict:
     """Ejecuta una simulación completa y devuelve su trace con métricas."""
 
     mundo = Mundo(config)
-    buzon = Buzon()  # el buzón con retraso aleatorio llega con la parte de mensajes (Emilio)
+    retraso = config.incertidumbre["retraso_mensajes"]
+    buzon = Buzon(mundo.azar("mensajes"), retraso["probabilidad"], retraso["maximo"])
 
     # orden del tick y del catálogo: cosechadoras y luego carros, por id (spec §3)
     cosechadoras = [

@@ -213,3 +213,24 @@ Formato por entrada:
 - **Alternativa considerada:** no registrar combustible cuando la sección falta; sobrescribir la reserva de otro agente; franjas por número de filas.
 - **Por qué se descartó:** dos comportamientos según si la sección existe confunden y complican las métricas; sobrescribir en silencio permite choques; contar filas ignora los obstáculos (en E, la fila del muro tiene una sola celda).
 - **Afecta a:** Emilio (`camino`, `rendimiento`, `duracion`, `combustible_para`, `reservar`), Oswaldo (la API que su carro ya usa), Ilan (pruebas de `test_mundo` y `test_config`), Joel (combustible y `RECARGA` en el log).
+
+## 2026-11-24 — Buzón con retraso y cosechadora administradora: casos no especificados
+- **Estado:** DECIDIDO.
+- **Quién:** Joel, en nombre de Emilio (mensajes y cosechadora).
+- **Decisión:**
+  1. **Reintento = servicio nuevo** (`#n + 1`). Así cada servicio tiene exactamente un cfp por carro.
+  2. **Espera de propuestas:** `espera_propuestas + 2 × retraso máximo`, porque se pueden retrasar la llamada y la respuesta. Se corrigió el texto de la especificación.
+  3. **La llamada se evalúa justo después de cosechar**, en el mismo tick (como el `LLENA` de v0.1). Si se evaluara al inicio del paso siguiente, la subasta saldría un tick tarde frente a la base.
+  4. **En `FIN` la cosechadora sigue vaciando su buzón:** un mensaje viejo sin leer deja `hay_pendientes` en verdadero y la simulación nunca termina.
+  5. **Sin estados nuevos:** ir a recargar usa `REGRESANDO_A_BASE` y `EN_BASE` (el validador, el visor y Unity solo conocen los 7 estados).
+  6. **Combustible de la cosechadora:**
+     - tras cada transferencia estima solo la siguiente carga; con todo lo que falta del camino, un tanque chico nunca alcanzaría;
+     - la espera estimada es la mayor entre la teórica y la última que vivió, y el regreso lleva un margen del 25 %;
+     - **regreso de emergencia:** si mientras cosecha o espera ya solo le alcanza para volver respetando la reserva, regresa (con el grano) y vuelve a su lugar después de recargar. No lo hace si ya tiene un carro en camino (contratado, o el asignado al que avisó con `LLENA`), porque ese carro la seguiría hasta su base y se estorbarían.
+  7. **Rutas en el tiempo de la cosechadora:** usa las mismas reglas del carro (`docs/equipo/oswaldo/carro.md` §12): compromiso con el plan anterior, y los agentes quietos se suponen en su celda todo el horizonte. Una espera porque la siguiente celda está ocupada es `RESTRICCION R3` (una por espera) y solo es `BLOQUEO` si dura más que el horizonte. En la línea base (1 + 1, directa) se conserva el código de v0.1.
+  8. **Carro (en nombre de Oswaldo):** con el tanque lleno ya no rechaza por combustible. En un mapa donde el viaje no alcanza ni con el tanque lleno, rechazar siempre dejaba a la cosechadora llamando para siempre (pasó en F).
+  9. **Escenario F:** tanques de 100 L (cosechadora) y 60 L (carro). Con 60 y 40 L, una cosechadora en la esquina lejana no completaba ni una carga más el regreso. Las 80 corridas de F (4 estrategias × 20 seeds) terminan, y cada una tiene al menos 8 restricciones `combustible_reserva` y al menos 115 eventos `RECARGA`.
+- **Alternativa considerada:** reintentar con el mismo id; estimar todo el camino; un estado `RECARGANDO`; dejar que el carro rechace siempre que no alcance.
+- **Por qué se descartó:** rompe «un cfp por servicio»; con tanques chicos la cosechadora nunca saldría; los consumidores del log lo rechazarían; ciclo infinito de subastas.
+- **Limitación conocida:** en F todavía hay unos pocos ticks con un tanque en 0 L (9 en unos 40,000 ticks, al esperar mucho a un carro ya en camino). R11 se cumple (nunca negativo) y queda un aviso en el log de consola.
+- **Afecta a:** Oswaldo (regla 8), Ilan (pruebas de integración de D, E y F), Joel (experimentos).

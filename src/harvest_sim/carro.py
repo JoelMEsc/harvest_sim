@@ -335,7 +335,9 @@ class Carro:
             return
         costo, celdas, ticks_encendido = estimacion
 
-        if not self._alcanza(mundo, celdas, ticks_encendido):
+        # Con el tanque lleno no se rechaza por combustible (igual que _listo_para_salir): si el viaje no
+        # alcanza ni con el tanque lleno, rechazar siempre dejaría a la cosechadora llamando para siempre.
+        if not self._alcanza(mundo, celdas, ticks_encendido) and not self._tanque_lleno():
             self._enviar(buzon, RECHAZO, mensaje.emisor, tick, {"servicio": servicio, "motivo": "combustible"})
             mundo.registrar_restriccion(
                 self.agent_id, COMBUSTIBLE_RESERVA,

@@ -197,3 +197,65 @@ def test_log_de_consola_de_mensajes(caplog):
         "{x: 5, y: 1, carga: 10} (se entrega en t=015)",
         "t=015 | MSG #1 entregado a carro_1",
     ]
+
+# ---------------------------------------------------------------------------------------------------
+# Segunda entrega: tipos de la subasta y retraso aleatorio (§7 y §8)
+# ---------------------------------------------------------------------------------------------------
+
+import random  # noqa: E402
+
+from harvest_sim.datos.formato import PERFORMATIVAS  # noqa: E402
+from harvest_sim.mensajes import Buzon, Mensaje, TipoMensaje  # noqa: E402
+
+
+def _mensaje(tick, receptor="carro_1", tipo=TipoMensaje.LLENA):
+    return Mensaje(tipo=tipo, emisor="cosechadora_1", receptor=receptor, tick_envio=tick, payload={})
+
+
+def test_los_siete_tipos_tienen_performativa():
+    assert {t.value for t in TipoMensaje} == set(PERFORMATIVAS)
+    assert PERFORMATIVAS[TipoMensaje.SOLICITUD_SERVICIO.value] == "cfp"
+    assert PERFORMATIVAS[TipoMensaje.ACEPTACION.value] == "accept-proposal"
+
+
+def test_sin_probabilidad_no_se_llama_al_generador():
+    class AzarProhibido:
+        def random(self):
+            raise AssertionError("con probabilidad 0 no se llama al generador")
+        randint = random
+
+    buzon = Buzon(AzarProhibido(), 0.0, 3)
+    buzon.enviar(_mensaje(4))
+    assert buzon.drenar_eventos()[0]["entrega_en"] == 5
+
+
+def test_retraso_dentro_del_rango_y_entrega_en_ese_tick():
+    buzon = Buzon(random.Random(7), 1.0, 2)
+    for tick in range(10):
+        buzon.enviar(_mensaje(tick))
+    eventos = buzon.drenar_eventos()
+    entregas = {e["id"]: e["entrega_en"] for e in eventos}
+    assert all(t + 2 <= entregas[i + 1] <= t + 3 for i, t in enumerate(range(10)))
+    assert len(set(entregas.values())) > 1
+    for tick in range(20):
+        buzon.entregar(tick)
+        for e in buzon.drenar_eventos():
+            assert entregas[e["id"]] == tick  # se entrega exactamente en su entrega_en
+    while buzon.leer("carro_1") is not None:
+        pass
+    assert not buzon.hay_pendientes("carro_1")
+
+
+def test_maximo_cero_no_retrasa_aunque_haya_probabilidad():
+    buzon = Buzon(random.Random(1), 1.0, 0)
+    buzon.enviar(_mensaje(3))
+    assert buzon.drenar_eventos()[0]["entrega_en"] == 4
+
+
+def test_en_empate_se_entrega_por_id():
+    buzon = Buzon()
+    for receptor in ("carro_2", "carro_1", "carro_2"):
+        buzon.enviar(_mensaje(1, receptor))
+    buzon.drenar_eventos()
+    buzon.entregar(2)
+    assert [e["id"] for e in buzon.drenar_eventos()] == [1, 2, 3]

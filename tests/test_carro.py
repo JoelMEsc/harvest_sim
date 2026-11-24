@@ -523,6 +523,13 @@ def test_subasta_propone_con_estimar_costo_y_rechaza():
     assert buzon.enviados[-1].payload == {"servicio": "cosechadora_1#3", "motivo": "combustible"}
     assert mundo.restricciones == [(0, "carro_1", "combustible_reserva")]
 
+    # Con el tanque lleno ya no rechaza por combustible aunque el viaje no alcance (agregado al
+    # integrar la cosechadora): si no, en un mapa grande la cosechadora llamaría para siempre.
+    carro.tanque, carro.combustible = 3.0, 3.0
+    buzon.entregar(solicitud("cosechadora_1#4", "cosechadora_1", POS_COSECHADORA))
+    carro.paso(10, mundo, buzon)
+    assert buzon.enviados[-1].tipo == PROPUESTA
+
 
 def test_subasta_costo_cuenta_la_fila():
     """El costo suma lo que le falta de su fila (traslados, transferencias y descargas, §7)."""
