@@ -267,7 +267,7 @@ def test_cosechar_registra_cambio():
     # 3. Drenar eventos acumulados
     eventos = mundo.drenar_eventos()
     assert eventos == [
-        {"tipo": "CELDA_COSECHADA", "celda": [1, 1], "agente": "cosechadora_1"},
+        {"tipo": "CELDA_COSECHADA", "celda": [1, 1], "agente": "cosechadora_1", "cantidad": 1},
         {"tipo": "DEPOSITO", "agente": "carro_1", "cantidad": 10, "entregado_total": 10},
     ]
 
@@ -307,3 +307,187 @@ def test_descripcion_del_mundo():
     assert isinstance(desc["bases"]["cosechadora_1"], list)
     assert desc["grano_por_celda"] == 1
     assert desc["obstaculos"] == []
+
+
+# ---------------------------------------------------------------------------------------------------
+# Segunda entrega: franjas, obstáculos, reservas, azar, rendimiento, duraciones y combustible
+# ---------------------------------------------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
+
+
+def mundo_de(nombre=None, **cambios):
+    """Mundo de un escenario de config/ o de la configuración de prueba con cambios."""
+    from dataclasses import replace
+    from harvest_sim.config import cargar_config
+    from harvest_sim.mundo import Mundo
+
+    config = cargar_config(CONFIG_DIR / f"{nombre}.json") if nombre else crear_config()
+    return Mundo(replace(config, **cambios) if cambios else config)
+
+
+@pytest.mark.parametrize("nombre,tamanos", [("escenario_d", [40, 30]), ("escenario_e", [28, 27]),
+                                             ("escenario_f", None)])
+def test_franjas(nombre, tamanos):
+    """Las franjas cubren cada celda libre del campo una sola vez, sin obstáculos, con filas contiguas
+    y tamaños lo más parejos posible (D: 40/30; E: 28/27, calculados a mano en el plan)."""
+    from harvest_sim.datos.campo import celdas_de_campo
+
+    mundo = mundo_de(nombre)
+    caminos = [mundo.camino(f"cosechadora_{j}") for j in range(1, mundo.config.num_cosechadoras + 1)]
+    todas = [c for camino in caminos for c in camino]
+    assert len(todas) == len(set(todas))
+    assert set(todas) == celdas_de_campo(mundo.descripcion())
+    assert not set(todas) & mundo.obstaculos
+    for filas in mundo.franjas():
+        assert filas == list(range(filas[0], filas[-1] + 1))
+    if tamanos:
+        assert [len(c) for c in caminos] == tamanos
+
+
+def test_una_franja_es_la_serpentina_de_v0_1():
+    mundo = mundo_de()
+    esperado = []
+    for y in range(1, mundo.alto):
+        columnas = range(mundo.ancho) if y % 2 else range(mundo.ancho - 1, -1, -1)
+        esperado.extend((x, y) for x in columnas)
+    assert mundo.camino_serpentina() == mundo.camino("cosechadora_1") == esperado
+
+
+def test_obstaculos_bloqueados_para_todos():
+    mundo = mundo_de("escenario_e")
+    assert (0, 3) in mundo.bloqueadas_fijas("carro_1")
+    assert (0, 0) in mundo.bloqueadas_fijas("cosechadora_1") and (0, 0) not in mundo.bloqueadas_fijas("carro_1")
+    ruta = mundo.ruta_bfs((1, 2), (1, 4), set())
+    assert (4, 3) in ruta and not set(ruta) & mundo.obstaculos  # cruza por el hueco
+
+
+def test_reservar_reemplaza_las_futuras_y_reservas_excepto():
+    mundo = mundo_de()
+    mundo.reservar("carro_1", [((1, 0), 5), ((1, 1), 6), ((1, 2), 7)])
+    mundo.reservar("carro_1", [((1, 1), 6), ((2, 1), 7)])  # desde el tick 6
+    mundo.reservar("cosechadora_1", [((3, 3), 6)])
+    assert mundo.reservas(excepto="cosechadora_1") == {((1, 0), 5): "carro_1", ((1, 1), 6): "carro_1",
+                                                       ((2, 1), 7): "carro_1"}
+    assert mundo.reservas(excepto="carro_1") == {((3, 3), 6): "cosechadora_1"}
+    mundo.reservar("cosechadora_1", [((2, 1), 7)])  # ya es del carro: gana quien reservó primero
+    assert mundo.reservas()[((2, 1), 7)] == "carro_1"
+
+
+def test_nuevo_tick_olvida_las_reservas_pasadas():
+    mundo = mundo_de()
+    mundo.reservar("carro_1", [((1, 0), 5), ((1, 1), 6)])
+    mundo.nuevo_tick(6)
+    assert mundo.reservas() == {((1, 1), 6): "carro_1"}
+
+
+def test_azar_reproducible_por_fuente():
+    a, b = mundo_de(), mundo_de()
+    secuencia = [a.azar("duracion").random() for _ in range(3)]
+    b.azar("otra_fuente").random()  # usar otra fuente no cambia esta
+    assert [b.azar("duracion").random() for _ in range(3)] == secuencia
+    assert a.azar("duracion") is a.azar("duracion")
+
+
+def test_rendimiento_fijo_no_usa_el_generador():
+    mundo = mundo_de()
+    assert "rendimiento" not in mundo._azar
+    assert mundo.rendimiento((1, 1)) == 1 and mundo.rendimiento((0, 0)) == 0
+    assert "rendimiento" not in mundo.descripcion()
+
+
+def test_rendimiento_sorteado_reproducible_y_en_la_descripcion():
+    incertidumbre = {"rendimiento": {"minimo": 1, "maximo": 3}, "duracion_extra_maxima": 0,
+                     "retraso_mensajes": {"probabilidad": 0.0, "maximo": 0}}
+    a, b = mundo_de(incertidumbre=incertidumbre), mundo_de(incertidumbre=incertidumbre)
+    matriz = a.descripcion()["rendimiento"]
+    assert matriz == b.descripcion()["rendimiento"]
+    assert matriz[0] == [0] * a.ancho  # fila de servicio
+    assert {v for fila in matriz[1:] for v in fila} <= {1, 2, 3}
+    assert a.grano_total == sum(map(sum, matriz))
+
+
+def test_cosechar_usa_el_rendimiento():
+    incertidumbre = {"rendimiento": {"minimo": 2, "maximo": 2}, "duracion_extra_maxima": 0,
+                     "retraso_mensajes": {"probabilidad": 0.0, "maximo": 0}}
+    from harvest_sim.mundo import Mundo
+    from dataclasses import replace
+    mundo = Mundo(replace(crear_config(), incertidumbre=incertidumbre))
+    cosechadora = DummyAgente("cosechadora_1", capacidad=10)
+    mundo.registrar(cosechadora)
+    cosechadora.posicion = (1, 1)
+    assert mundo.cosechar("cosechadora_1", (1, 1)) == 2 and cosechadora.carga == 2
+    assert mundo.drenar_eventos()[0]["cantidad"] == 2
+    assert mundo.grano_cosechado() == 2
+    assert "rendimiento" in mundo.descripcion()  # 2 != grano_por_celda
+
+
+def test_duracion_sin_y_con_extra():
+    mundo = mundo_de()
+    assert mundo.duracion(5, 2) == 3 and "duracion" not in mundo._azar
+    incertidumbre = {"rendimiento": {"minimo": 1, "maximo": 1}, "duracion_extra_maxima": 2,
+                     "retraso_mensajes": {"probabilidad": 0.0, "maximo": 0}}
+    con_extra = mundo_de(incertidumbre=incertidumbre)
+    valores = {con_extra.duracion(5, 2) for _ in range(50)}
+    assert valores <= {3, 4, 5} and len(valores) > 1
+
+
+def _combustible(**cambios):
+    from harvest_sim.config import COMBUSTIBLE_POR_DEFECTO
+    return {**COMBUSTIBLE_POR_DEFECTO, "tanque_carro": 10, "tanque_cosechadora": 20, **cambios}
+
+
+def test_combustible_consumo_y_recarga_solo_en_base():
+    mundo = mundo_de(combustible=_combustible())
+    carro = DummyAgente("carro_1")
+    mundo.registrar(carro)
+    assert (carro.tanque, carro.combustible) == (10.0, 10.0)
+    carro.estado, carro.posicion = "YENDO_A_BODEGA", (1, 1)
+    mundo.actualizar_combustible(carro, se_movio=True)           # -1.0 por celda
+    carro.estado = "DESCARGANDO"
+    mundo.actualizar_combustible(carro, se_movio=False)          # -0.5 encendido
+    assert carro.combustible == 8.5
+    carro.estado = "EN_BASE"                                     # fuera de su base: no recarga
+    mundo.actualizar_combustible(carro, se_movio=False)
+    assert carro.combustible == 8.5 and mundo.drenar_eventos() == []
+    carro.posicion = mundo.base_de("carro_1")                    # en su base y apagado: recarga todo
+    mundo.actualizar_combustible(carro, se_movio=False)
+    assert carro.combustible == 10.0
+    assert mundo.drenar_eventos() == [{"tipo": "RECARGA", "agente": "carro_1", "cantidad": 1.5, "nivel": 10.0}]
+
+
+def test_recarga_a_tasa_por_tick():
+    mundo = mundo_de(combustible=_combustible(tasa_recarga=1))
+    carro = DummyAgente("carro_1")
+    mundo.registrar(carro)
+    carro.combustible = 7.5
+    mundo.actualizar_combustible(carro, se_movio=False)
+    assert carro.combustible == 8.5
+    assert mundo.drenar_eventos()[0]["cantidad"] == 1
+
+
+def test_combustible_nunca_negativo():
+    mundo = mundo_de(combustible=_combustible())
+    cosechadora = DummyAgente("cosechadora_1", estado="COSECHANDO")
+    mundo.registrar(cosechadora)
+    cosechadora.combustible, cosechadora.posicion = 1.0, (1, 1)
+    mundo.actualizar_combustible(cosechadora, se_movio=True)    # gastaría 2.0
+    assert cosechadora.combustible == 0.0
+
+
+def test_combustible_para():
+    mundo = mundo_de()
+    assert mundo.combustible_para("carro_1", 10, 4) == 10 * 1.0 + 4 * 0.5
+    assert mundo.combustible_para("cosechadora_1", 3, 0) == 6.0
+
+
+def test_restriccion_registrada_y_regla_validada():
+    mundo = mundo_de()
+    mundo.registrar(DummyAgente("carro_1"))
+    mundo.registrar_restriccion("carro_1", "R3_celda_ocupada", "esperó a cosechadora_1")
+    assert mundo.drenar_eventos() == [{"tipo": "RESTRICCION", "agente": "carro_1", "regla": "R3_celda_ocupada",
+                                       "detalle": "esperó a cosechadora_1"}]
+    with pytest.raises(ValueError, match="regla desconocida"):
+        mundo.registrar_restriccion("carro_1", "R99", "x")

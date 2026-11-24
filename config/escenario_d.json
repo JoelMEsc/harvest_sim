@@ -1,0 +1,18 @@
+{
+  "nombre": "escenario_d",
+  "seed": 0,
+  "ancho": 10,
+  "alto": 8,
+  "num_carros": 1,
+  "num_cosechadoras": 2,
+  "grano_por_celda": 1,
+  "capacidad_cosechadora": 8,
+  "capacidad_carro": 16,
+  "tasa_transferencia": 2,
+  "tasa_descarga": 4,
+  "max_ticks": 5000,
+  "obstaculos": {
+    "celdas": [],
+    "regiones": []
+  }
+}

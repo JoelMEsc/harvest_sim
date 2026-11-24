@@ -74,7 +74,7 @@ Todas las secciones nuevas son **opcionales**: si faltan, se usan los valores po
 | `incertidumbre.rendimiento` | 1 ≤ mínimo ≤ máximo | 1, 1 (= `grano_por_celda`) | Grano por celda, sorteado al crear el mundo |
 | `incertidumbre.duracion_extra_maxima` | entero ≥ 0 | 0 | Ticks extra sorteados en cada transferencia y descarga |
 | `incertidumbre.retraso_mensajes` | 0 ≤ p ≤ 1, máximo ≥ 0 | 0, 0 | Probabilidad de que un mensaje llegue tarde y cuántos ticks como máximo |
-| `combustible.*` | números > 0; reserva en [0, 1) | tanques enormes (nunca recargan) | Consumo en litros; `tasa_recarga` 0 = recarga instantánea |
+| `combustible.*` | números > 0; reserva en [0, 1) | tanques enormes (la reserva nunca se activa; sí hay `RECARGA` al volver a la base) | Consumo en litros; `tasa_recarga` 0 = recarga instantánea |
 | `costo.pesos` | números ≥ 0 | los de arriba | Solo afectan al cálculo de J (§11) |
 
 **Las cuatro estrategias que se comparan** (todas con los mismos escenarios y semillas):

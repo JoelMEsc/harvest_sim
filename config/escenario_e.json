@@ -1,0 +1,39 @@
+{
+  "nombre": "escenario_e",
+  "seed": 0,
+  "ancho": 9,
+  "alto": 8,
+  "num_carros": 2,
+  "num_cosechadoras": 2,
+  "grano_por_celda": 1,
+  "capacidad_cosechadora": 8,
+  "capacidad_carro": 16,
+  "tasa_transferencia": 2,
+  "tasa_descarga": 4,
+  "max_ticks": 5000,
+  "obstaculos": {
+    "celdas": [],
+    "regiones": [
+      {
+        "inicio": [
+          0,
+          3
+        ],
+        "tamano": [
+          4,
+          1
+        ]
+      },
+      {
+        "inicio": [
+          5,
+          3
+        ],
+        "tamano": [
+          4,
+          1
+        ]
+      }
+    ]
+  }
+}

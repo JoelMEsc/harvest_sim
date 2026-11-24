@@ -199,3 +199,17 @@ Formato por entrada:
 - **Alternativa considerada:** `cantidad` obligatoria en 2.2; comparar medias sin emparejar; extender el generador con la subasta; contar `num_ciclos` como mensajes `LLENA`.
 - **Por qué se descartó:** `cantidad` obligatoria rompía las corridas mientras `mundo.cosechar` no la envíe; sin emparejar, la variación entre seeds ensancha los intervalos; el generador duplicaría la lógica de Emilio y Oswaldo; con la subasta no hay `LLENA` y la métrica valdría 0.
 - **Afecta a:** Emilio y Oswaldo (importar tipos y performativas de `datos.formato`), Carlos (`cantidad` y `combustible` opcionales), Mario Giovanni (traces de ejemplo, servidor, `ESTRATEGIAS`), Ilan (dependencias del CI).
+
+## 2026-11-24 — Mundo de la segunda entrega: franjas, reservas, rendimiento y combustible
+- **Estado:** DECIDIDO.
+- **Quién:** Joel, en nombre de Carlos (Mundo).
+- **Decisión:**
+  1. **Secciones opcionales:** `cargar_config` exige solo los campos de la primera entrega. `politica`, `incertidumbre`, `combustible` y `costo` se completan con sus valores por defecto (también los dicts anidados) y rechazan las claves desconocidas. Los defectos de `politica` viven en `config.POLITICA_POR_DEFECTO`, y los pesos de J en `datos.metricas.PESOS_COSTO`, que es la única fuente.
+  2. **Rendimiento por defecto = `grano_por_celda`.** La regla del múltiplo de la capacidad se exige solo con rendimiento fijo. La matriz `rendimiento` va en la descripción solo si alguna celda da distinto de `grano_por_celda`.
+  3. **Franjas:** cada corte va después de la fila cuyo acumulado de celdas libres queda más cerca de k·N/m; en empate, la franja de arriba se queda con la fila. Resultados: D da 40/30 y E da 28/27. La serpentina usa la paridad global (fila impar: x creciente), así que con una cosechadora es la de v0.1. Nueva validación: `alto − 1 ≥ num_cosechadoras`.
+  4. **Reservas:** `reservar` reemplaza las del agente desde el primer tick de la lista. Si otro ya tiene esa `(celda, tick)`, gana quien reservó primero (el orden del tick). `nuevo_tick` olvida las pasadas.
+  5. **Recarga con los tanques por defecto:** los agentes recargan al volver a su base aunque el tanque sea enorme (la regla del §9 no distingue). A, B y C tienen ahora eventos `RECARGA` y `combustible` en el log, pero **ninguna métrica de v0.1 cambia** (`test_regresion`). Se corrigió en la especificación el texto «nunca recargan».
+  6. **Buzón:** en esta rama, `ejecutar` crea `Buzon()`; el buzón con retraso llega con la parte de mensajes.
+- **Alternativa considerada:** no registrar combustible cuando la sección falta; sobrescribir la reserva de otro agente; franjas por número de filas.
+- **Por qué se descartó:** dos comportamientos según si la sección existe confunden y complican las métricas; sobrescribir en silencio permite choques; contar filas ignora los obstáculos (en E, la fila del muro tiene una sola celda).
+- **Afecta a:** Emilio (`camino`, `rendimiento`, `duracion`, `combustible_para`, `reservar`), Oswaldo (la API que su carro ya usa), Ilan (pruebas de `test_mundo` y `test_config`), Joel (combustible y `RECARGA` en el log).

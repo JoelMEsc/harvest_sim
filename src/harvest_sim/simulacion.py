@@ -25,29 +25,28 @@ def ejecutar(config: Config) -> dict:
     """Ejecuta una simulación completa y devuelve su trace con métricas."""
 
     mundo = Mundo(config)
-    buzon = Buzon()
+    buzon = Buzon()  # el buzón con retraso aleatorio llega con la parte de mensajes (Emilio)
 
-    cosechadora = Cosechadora(
-        "cosechadora_1", config.capacidad_cosechadora
-    )
-    carro = Carro(
-        "carro_1", config.capacidad_carro
-    )
-
-    agentes = [cosechadora, carro]
+    # orden del tick y del catálogo: cosechadoras y luego carros, por id (spec §3)
+    cosechadoras = [
+        Cosechadora(f"cosechadora_{j}", config.capacidad_cosechadora)
+        for j in range(1, config.num_cosechadoras + 1)
+    ]
+    carros = [
+        Carro(f"carro_{i}", config.capacidad_carro)
+        for i in range(1, config.num_carros + 1)
+    ]
+    agentes = cosechadoras + carros
 
     for agente in agentes:
         mundo.registrar(agente)
 
     # crear el catálogo estático de agentes
     catalogo = []
-    for agente, tipo in (
-        (cosechadora, COSECHADORA),
-        (carro, CARRO),
-    ):
+    for agente in agentes:
         catalogo.append({
             "id": agente.agent_id,
-            "tipo": tipo,
+            "tipo": COSECHADORA if agente in cosechadoras else CARRO,
             "capacidad": agente.capacidad,
             "base": list(mundo.base_de(agente.agent_id)),
         })
@@ -67,8 +66,10 @@ def ejecutar(config: Config) -> dict:
 
     for tick in range(1, config.max_ticks + 1):
 
-        # entregar los mensajes enviados en el tick anterior
+        # olvidar las reservas pasadas y entregar los mensajes que llegan en este tick
+        mundo.nuevo_tick(tick)
         buzon.entregar(tick)
+        inicio = {agente.agent_id: agente.posicion for agente in agentes}
 
         # ejecutar primero la cosechadora y después el carro
         for agente in agentes:
@@ -95,6 +96,10 @@ def ejecutar(config: Config) -> dict:
                     agente.posicion,
                 )
 
+        # combustible: consumo y recarga después de que todos actuaron (spec §9)
+        for agente in agentes:
+            mundo.actualizar_combustible(agente, agente.posicion != inicio[agente.agent_id])
+
         # recoger los eventos producidos durante este tick
         eventos = buzon.drenar_eventos() + mundo.drenar_eventos()
 
@@ -107,6 +112,18 @@ def ejecutar(config: Config) -> dict:
                     evento["cantidad"],
                     evento["entregado_total"],
                     mundo.grano_total,
+                )
+
+            elif evento["tipo"] == "RECARGA":
+                registrador.info(
+                    "t=%03d | %s recarga %.2f L (nivel: %.2f)",
+                    tick, evento["agente"], evento["cantidad"], evento["nivel"],
+                )
+
+            elif evento["tipo"] == "RESTRICCION":
+                registrador.info(
+                    "t=%03d | %s RESTRICCION %s: %s",
+                    tick, evento["agente"], evento["regla"], evento["detalle"],
                 )
 
             elif evento["tipo"] == "CELDA_COSECHADA":
@@ -125,13 +142,7 @@ def ejecutar(config: Config) -> dict:
         )
 
         # comprobar si todas las operaciones han terminado
-        if (
-            cosechadora.estado == FIN
-            and carro.estado == EN_BASE
-            and not buzon.hay_pendientes(carro.agent_id)
-            and carro.carga == 0
-            and mundo.entregado == mundo.grano_total
-        ):
+        if _terminado(mundo, buzon, cosechadoras, carros):
             break
 
     else:
@@ -147,3 +158,14 @@ def ejecutar(config: Config) -> dict:
     trace["metricas"] = calcular_metricas(trace)
 
     return trace
+
+
+def _terminado(mundo: Mundo, buzon: Buzon, cosechadoras: list, carros: list) -> bool:
+    """Término (spec §3): todas las cosechadoras en FIN; todos los carros en EN_BASE, vacíos y sin
+    servicios en cola; ningún mensaje pendiente; todo el grano entregado."""
+    return (
+        all(c.estado == FIN for c in cosechadoras)
+        and all(c.estado == EN_BASE and c.carga == 0 and not getattr(c, "servicios", ()) for c in carros)
+        and not any(buzon.hay_pendientes(a.agent_id) for a in cosechadoras + carros)
+        and mundo.entregado == mundo.grano_total
+    )
