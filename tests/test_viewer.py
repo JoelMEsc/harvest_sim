@@ -84,6 +84,33 @@ def test_no_deduce_cosecha_de_la_posicion(viewer):
     assert rep.cosechadas == {(3, 2)}
 
 
+def test_visor_22_muestra_combustible_alertas_y_varios_agentes(viewer):
+    trace = trace_de_prueba()
+    trace["schema_version"] = "2.2"
+    trace["config"]["combustible"] = {"tanque_cosechadora": 100, "tanque_carro": 80}
+    trace["mundo"]["rendimiento"] = [[0] * 4, [1, 2, 3, 4], [4, 3, 2, 1]]
+    trace["agentes"].append({"id": "carro_2", "tipo": "carro", "capacidad": 6, "base": [3, 0]})
+    trace["mundo"]["bases"]["carro_2"] = [3, 0]
+    trace["ticks"][0]["cambios"].append({"tipo": "AGENTE", "id": "carro_2", "set": {
+        "pose": {"x": 3, "y": 0, "orientacion": "N"}, "estado": "EN_BASE", "carga": 0, "combustible": 80}})
+    trace["ticks"][0]["cambios"][0]["set"]["combustible"] = 100
+    trace["ticks"][0]["cambios"][1]["set"]["combustible"] = 80
+    trace["ticks"][1]["cambios"].extend([
+        {"tipo": "AGENTE", "id": "carro_2", "set": {"combustible": 65}},
+        {"tipo": "RECARGA", "agente": "carro_2", "cantidad": 15, "nivel": 80},
+        {"tipo": "RESTRICCION", "agente": "carro_2", "regla": "reserva", "detalle": "pasillo ocupado"},
+    ])
+    rep = viewer.Reproductor(trace)
+    rep.ir_a(3)
+    assert rep.agentes["carro_2"]["combustible"] == 65
+    assert {e["tipo"] for e in rep.eventos} == {"RECARGA", "RESTRICCION"}
+    assert viewer.dibujar(rep).get_width() >= 900
+    rep.ir_a(4)
+    assert rep.eventos == [] and rep.agentes["carro_2"]["combustible"] == 65
+    rep.ir_a(0)
+    assert rep.agentes["carro_2"]["combustible"] == 80
+
+
 def test_exporta_png_inicial_intermedios_y_final(viewer, tmp_path):
     ruta = tmp_path / "trace.json"
     ruta.write_text(json.dumps(trace_de_prueba()))
@@ -231,3 +258,38 @@ def test_cli_rechaza_nombre_con_escape_de_carpeta(cli_preparada, tmp_path, capsy
     config.nombre = "../fuera"
     assert cli.main(["config.json", "--salida", str(tmp_path)]) == 1
     assert "sin rutas" in capsys.readouterr().err
+
+
+def test_cli_sobrescribe_seed_y_estrategia_sin_cambiar_config_original(cli_preparada, monkeypatch, tmp_path):
+    from dataclasses import make_dataclass
+    from harvest_sim.datos import experimentos
+
+    cli, _, trace = cli_preparada
+    ConfigPrueba = make_dataclass("ConfigPrueba", [("nombre", str), ("seed", int), ("politica", dict)], frozen=True)
+    original = ConfigPrueba("escenario_prueba", 0, {"asignacion": "directa", "espera_propuestas": 2})
+    recibidas = []
+    monkeypatch.setattr(cli, "cargar_config", lambda _: original)
+    monkeypatch.setattr(cli, "ejecutar", lambda cfg: recibidas.append(cfg) or trace)
+    monkeypatch.setattr(experimentos, "ESTRATEGIAS", {"anticipada": {"asignacion": "subasta", "umbral_aviso": .7}}, raising=False)
+    assert cli.main(["config.json", "--salida", str(tmp_path), "--sin-plots", "--seed", "3", "--estrategia", "anticipada"]) == 0
+    assert recibidas[0].seed == 3
+    assert recibidas[0].politica == {"asignacion": "subasta", "espera_propuestas": 2, "umbral_aviso": .7}
+    assert original.seed == 0 and original.politica == {"asignacion": "directa", "espera_propuestas": 2}
+
+
+def test_cli_rechaza_seed_negativa_y_estrategia_sin_contrato(cli_preparada, monkeypatch, tmp_path, capsys):
+    from harvest_sim.datos import experimentos
+
+    cli, _, _ = cli_preparada
+    assert cli.main(["config.json", "--salida", str(tmp_path), "--seed", "-1"]) == 1
+    assert "--seed" in capsys.readouterr().err
+    # sin el contrato de Datos (ESTRATEGIAS) la CLI lo dice; la prueba no depende de que ya exista
+    with monkeypatch.context() as m:
+        m.delattr(experimentos, "ESTRATEGIAS", raising=False)
+        assert cli.main(["config.json", "--salida", str(tmp_path), "--estrategia", "subasta"]) == 1
+        assert "ESTRATEGIAS" in capsys.readouterr().err
+    # con el contrato, pero con una configuración sin politica, el error nombra la politica
+    m2 = {"subasta": {"politica": {"asignacion": "subasta"}}}
+    monkeypatch.setattr(experimentos, "ESTRATEGIAS", m2, raising=False)
+    assert cli.main(["config.json", "--salida", str(tmp_path), "--estrategia", "subasta"]) == 1
+    assert "politica" in capsys.readouterr().err

@@ -99,16 +99,17 @@ def generar_dashboard(carpetas, salida, comparacion=None, experimentos=None):
     for carpeta in carpetas:
         with (carpeta / "trace.json").open(encoding="utf-8") as archivo:
             trace = json.load(archivo)
-        if trace.get("schema_version") != "2.1":
-            raise ValueError(f"{carpeta.name}: se requiere trace 2.1")
+        if trace.get("schema_version") not in ("2.1", "2.2"):
+            raise ValueError(f"{carpeta.name}: se requiere trace 2.1 o 2.2")
         escenarios.append((carpeta, trace, trace["meta"]["escenario"]))
+    versiones = ", ".join(sorted({trace["schema_version"] for _, trace, _ in escenarios}))
     partes = ['<!doctype html><html lang="es"><head><meta charset="utf-8">',
               '<meta name="viewport" content="width=device-width,initial-scale=1">',
               f'<title>Harvest Sim · Dashboard</title><style>{CSS}</style></head><body>',
-              '<header><div class="eyebrow">Equipo 3 / TC2008B / Línea base reactiva</div>',
+              '<header><div class="eyebrow">Equipo 3 / TC2008B / Coordinación multiagente</div>',
               '<h1>De la cosecha<br>a los resultados.</h1>',
-              '<p>Una cosechadora, un carro y el tiempo que cuesta esperar. Explora el entorno, los indicadores y la comparación experimental.</p>',
-              f'<span class="badge">{len(escenarios)} escenarios · trace 2.1</span>',
+              '<p>Explora el entorno, los indicadores y la comparación de estrategias de cosecha.</p>',
+              f'<span class="badge">{len(escenarios)} escenarios · trace {versiones}</span>',
               '<nav aria-label="Paneles"><a href="#entorno">01 Entorno</a><a href="#indicadores">02 Indicadores</a><a href="#experimental">03 Experimental</a></nav></header><main>']
     if any(nombre.startswith(("ejemplo", "prueba")) for _, _, nombre in escenarios):
         partes.append('<p class="missing"><strong>Datos de ejemplo.</strong> Esta página sirve para verificar la interfaz; no presenta resultados de la simulación real.</p>')
@@ -136,11 +137,28 @@ def generar_dashboard(carpetas, salida, comparacion=None, experimentos=None):
         partes.append('</div></article>')
     partes.append('</section><section id="experimental"><div class="section-head"><p class="eyebrow">03 / Comparación</p><h2>Experimental</h2><p class="muted">Parámetros, resultados comparados y sensibilidad del sistema.</p></div><div class="card">')
     filas = []
+    filas_avanzadas = []
     for _, trace, nombre in escenarios:
         cfg = trace["config"]
+        politica = cfg.get("politica", {})
+        combustible = cfg.get("combustible", {})
+        incertidumbre = cfg.get("incertidumbre", {})
+        rendimiento = incertidumbre.get("rendimiento", {})
+        retraso = incertidumbre.get("retraso_mensajes", {})
         filas.append([nombre, f'{cfg.get("ancho", "—")} × {cfg.get("alto", "—")}',
-                      *[cfg.get(k, "No disponible") for k in ("num_cosechadoras", "num_carros", "grano_por_celda", "capacidad_cosechadora", "capacidad_carro", "tasa_transferencia", "tasa_descarga")]])
-    partes.append(tabla("Parámetros por escenario", ["Escenario", "Campo (celdas)", "Cosechadoras", "Carros", "Grano (u./celda)", "Cap. cosechadora (u.)", "Cap. carro (u.)", "Transferencia (u./tick)", "Descarga (u./tick)"], filas))
+                      *[cfg.get(k, "—") for k in ("num_cosechadoras", "num_carros", "grano_por_celda", "capacidad_cosechadora", "capacidad_carro", "tasa_transferencia", "tasa_descarga")],
+                      len(trace["mundo"].get("obstaculos", [])), cfg.get("seed", "—"),
+                      politica.get("asignacion", "—"), politica.get("umbral_aviso", "—"),
+                      combustible.get("tanque_cosechadora", "—"), combustible.get("tanque_carro", "—")])
+        opciones = [politica.get(k, "—") for k in ("atender_desde_bodega", "encadenar_servicios")]
+        filas_avanzadas.append([nombre,
+            *[("Sí" if v else "No") if isinstance(v, bool) else v for v in opciones],
+            *[politica.get(k, "—") for k in ("espera_propuestas", "reintento_subasta")],
+            rendimiento.get("minimo", "—"), rendimiento.get("maximo", "—"),
+            incertidumbre.get("duracion_extra_maxima", "—"), retraso.get("probabilidad", "—"), retraso.get("maximo", "—"),
+            combustible.get("reserva", "—"), combustible.get("tasa_recarga", "—")])
+    partes.append(tabla("Parámetros por escenario", ["Escenario", "Campo (celdas)", "Cosechadoras", "Carros", "Grano (u./celda)", "Cap. cosechadora (u.)", "Cap. carro (u.)", "Transferencia (u./tick)", "Descarga (u./tick)", "Obstáculos", "Semilla", "Asignación", "Umbral de aviso", "Tanque cosechadora (L)", "Tanque carro (L)"], filas))
+    partes.append(tabla("Política, incertidumbre y combustible", ["Escenario", "Atender desde bodega", "Encadenar servicios", "Espera de propuestas (ticks)", "Reintento de subasta (ticks)", "Rendimiento mínimo (u./celda)", "Rendimiento máximo (u./celda)", "Duración extra máxima (ticks)", "Probabilidad de retraso", "Retraso máximo (ticks)", "Reserva de combustible (fracción)", "Tasa de recarga (L/tick; 0 = instantánea)"], filas_avanzadas))
     partes.append(imagen(comparacion / "comparacion_escenarios.png", "Comparación entre escenarios", "¿Cómo cambian el tiempo, la distancia, la utilización y los bloqueos?"))
     partes.append('<details open><summary>Tabla resumen</summary>')
     partes.append(tabla_csv(comparacion / "resumen.csv", "Resultados comparados · unidades en los indicadores y gráficas"))
@@ -160,6 +178,18 @@ def generar_dashboard(carpetas, salida, comparacion=None, experimentos=None):
         partes.append('<details><summary>Resumen del experimento: ' + escape(carpeta.name) + '</summary>')
         partes.append(tabla_csv(carpeta / "resumen.csv", "Resumen estadístico del barrido"))
         partes.append('</details>')
+    estrategias = experimentos / "estrategias"
+    partes.append('<h3>Comparación por estrategia</h3><p class="muted">Gráficas con intervalos de confianza del 95 % y desglose del costo J, generados por el experimento.</p>')
+    graficas_estrategia = sorted(estrategias.glob("*.png"))
+    tablas_estrategia = [p for p in sorted(estrategias.glob("*.csv")) if p.stem.startswith(("resumen", "comparacion", "costo", "j_por"))]
+    if not graficas_estrategia:
+        partes.append('<p class="missing">Sin gráficas de comparación por estrategia.</p>')
+    for grafica in graficas_estrategia:
+        partes.append(imagen(grafica, grafica.stem.replace("_", " "), "¿Cómo cambia este resultado entre estrategias?"))
+    if not tablas_estrategia:
+        partes.append('<p class="missing">Sin tablas de resultados por estrategia o costo J.</p>')
+    for resumen in tablas_estrategia:
+        partes.append(tabla_csv(resumen, resumen.stem.replace("_", " ")))
     partes.append('</article></section></main><footer>Harvest Sim · Lectura de resultados guardados. La simulación es la única fuente de verdad. Tiempo en ticks, distancia en celdas y grano en unidades.</footer></body></html>')
     salida = Path(salida)
     salida.parent.mkdir(parents=True, exist_ok=True)
