@@ -136,6 +136,16 @@ def test_grafica_de_sensibilidad(plots, tmp_path):
                                              tmp_path / "sens.png"))
 
 
+def test_grafica_de_sensibilidad_con_varias_estrategias(plots, tmp_path):
+    """Con dos estrategias en el barrido hay una línea por estrategia (antes se mezclaban en una sola)."""
+    filas = [{"escenario": "d", "estrategia": e, "capacidad_carro": c, "tiempo_ocioso_total": v}
+             for e, c, v in [("base", 8, 331), ("base", 16, 331), ("anticipada_plus", 8, 313),
+                             ("anticipada_plus", 16, 199)]]
+    resumen = resumen_por_grupo(filas, ["capacidad_carro"], ["tiempo_ocioso_total"])
+    assert len({(f["estrategia"], f["capacidad_carro"]) for f in resumen}) == 4
+    assert es_png(plots.grafica_sensibilidad(resumen, "capacidad_carro", "tiempo_ocioso_total", tmp_path / "s.png"))
+
+
 def test_main_genera_graficas_comparacion_y_tabla(plots, tmp_path, capsys):
     base = cargar_trace(FIXTURE)
     rutas = []

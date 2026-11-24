@@ -1,0 +1,9 @@
+{
+  "nombre": "capacidad_carro",
+  "descripcion": "¿Influye la capacidad del carro? En D (1 carro para 2 cosechadoras), la línea base contra anticipada_plus, que sí usa la capacidad (encadena servicios y atiende desde la bodega). Pregunta 4 de la retro de la semana 3.",
+  "escenarios": ["config/escenario_d.json"],
+  "estrategias": ["base", "anticipada_plus"],
+  "barrido": {"capacidad_carro": [8, 12, 16, 24, 32]},
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_ocioso_total"
+}

@@ -8,9 +8,7 @@ Una **cosechadora** recorre un campo en cuadrícula en serpentina. Cuando se lle
 
 La simulación está escrita en Python y produce un log por corrida (`trace.json`). El visor, las métricas, las gráficas, los experimentos y el dashboard **solo leen ese archivo**: la simulación es la única fuente de verdad.
 
-> **Estado (17 de noviembre de 2026):** entrega completa e integrada en `development` y `main`. Los tres escenarios corren de principio a fin, sus logs validan y las 230 pruebas pasan.
->
-> **Segunda entrega (en curso): coordinación multiagente.** Varios agentes, obstáculos, subasta Contract Net, despacho anticipado, aleatoriedad, combustible, costo J y servidor FastAPI para Unity. Qué se construye: [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md). Guía de cada persona: [`docs/equipo/`](docs/equipo/README.md). Visualización 3D: repositorio [`harvest-simu-visualization`](https://github.com/GioMax102/harvest-simu-visualization).
+> **Estado (24 de noviembre de 2026): segunda entrega integrada en `development`.** Varios agentes (franjas), obstáculos, rutas en el tiempo con reservas, subasta Contract Net con despacho anticipado, aleatoriedad con semilla, combustible con recargas, restricciones de seguridad registradas, costo J y servidor FastAPI para Unity. Seis escenarios (A–F): A, B y C siguen dando exactamente las métricas de la primera entrega (`tests/test_regresion.py`). **Resultados y respuestas a la retro:** [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md). Qué se construyó: [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md). Visualización 3D: [`harvest-simu-visualization`](https://github.com/GioMax102/harvest-simu-visualization).
 
 ---
 
@@ -24,7 +22,7 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
 
-bash scripts/correr_todos.sh     # simula los 3 escenarios, valida, grafica, corre el experimento y arma el dashboard
+bash scripts/correr_todos.sh     # simula A–F, valida, grafica, corre los experimentos y arma el dashboard
 ```
 
 Al terminar, abre **`runs/dashboard.html`** en el navegador: junta el entorno, los indicadores y los experimentos en una sola página.
@@ -35,13 +33,22 @@ Para comprobar que todo funciona desde cero en una carpeta limpia (crea un entor
 bash scripts/verificar_instalacion.sh
 ```
 
-La simulación es **determinista a propósito**: el mismo escenario produce siempre el mismo `trace.json`, byte a byte.
+La simulación es **reproducible**: el mismo escenario con la misma `seed` produce siempre el mismo `trace.json`, byte a byte. Para Unity, levanta el servidor con `bash scripts/servidor.sh` (http://127.0.0.1:8000, documentación en `/docs`).
+
+Otras formas de correr la segunda entrega:
+
+```bash
+python -m harvest_sim.cli config/escenario_e.json --estrategia anticipada_plus --seed 3
+python tools/correr_experimento.py config/experimentos/estrategias.json --procesos 8   # D, E, F × 4 estrategias × 20 seeds
+```
 
 ---
 
-## Resultados de la línea base
+## Resultados
 
-Con los tres escenarios de `config/` (generados con `bash scripts/correr_todos.sh`; la tabla completa queda en `runs/comparacion/resumen.md`):
+**Segunda entrega** (detalle, IC 95 % y figuras en [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md)): en D y E, atender desde la bodega y encadenar servicios (`anticipada_plus`) baja el ocio de las cosechadoras entre 36 % y 40 % y el costo J entre 31 % y 36 %; el umbral de aviso por sí solo apenas cambia el ocio (−1 %); la capacidad del carro solo importa cuando la política la usa; y en F (combustible escaso e incertidumbre) la línea base le gana a la subasta. 640 corridas sin colisiones ni bloqueos.
+
+**Línea base (primera entrega).** Con los tres escenarios de `config/` (generados con `bash scripts/correr_todos.sh`; la tabla completa queda en `runs/comparacion/resumen.md`):
 
 | Escenario | Campo | Capacidad cosechadora / carro | Tasas (transferencia / descarga) | Completación (ticks) | Tiempo ocioso (ticks) | % ocioso | Ciclos | Colisiones | Grano entregado |
 |---|---|---|---|---|---|---|---|---|---|
@@ -195,8 +202,9 @@ Cada escenario es un JSON en `config/` (nada de valores fijos en el código):
 ## Pruebas y CI
 
 ```bash
-pytest                                                    # 230 pruebas
-pytest tests/test_integracion.py                          # corridas completas de los 3 escenarios
+pytest                                                    # 650 pruebas
+pytest tests/test_integracion.py                          # corridas completas de A–F (y D, E, F con las 4 estrategias)
+pytest tests/test_regresion.py                            # A, B y C contra las métricas de v0.1
 pytest tests/test_mundo.py::test_serpentina_cubre_todo_el_campo
 ```
 
@@ -204,7 +212,9 @@ pytest tests/test_mundo.py::test_serpentina_cubre_todo_el_campo
 |---|---|
 | `test_config.py`, `test_mundo.py`, `test_rutas.py` | Configuración, layout, serpentina, reglas físicas y rutas |
 | `test_mensajes.py`, `test_cosechadora.py`, `test_carro.py` | Buzón y máquinas de estados de los agentes |
-| `test_integracion.py` | R1–R9, terminación, mensajes, checksums y reproducibilidad sobre las corridas reales |
+| `test_integracion.py` | R1–R11, terminación, mensajes y retraso, subasta, pasillo E (4 estrategias × 20 seeds), recargas, checksums y reproducibilidad sobre las corridas reales |
+| `test_regresion.py` | A, B y C dan las métricas guardadas de `v0.1-entrega1` |
+| `test_cosechadora_subasta.py`, `test_servidor.py` | Cosechadora administradora de la subasta y servidor FastAPI |
 | `test_trace.py`, `test_metricas.py`, `test_campo.py`, `test_validador.py`, `test_generador.py`, `test_experimentos.py`, `test_plots.py` | Log, métricas, campo, validador, experimentos y gráficas |
 | `test_viewer.py`, `test_dashboard.py` | Visor y dashboard sin ventana |
 
@@ -241,6 +251,7 @@ runs/                    salidas de las corridas (no se versionan)
 
 | Documento | Para qué |
 |---|---|
+| [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md) | Resultados de la segunda entrega: estrategias, incertidumbre, umbral, capacidad del carro, costo J, respuestas a la retro y limitaciones |
 | [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md) | Qué agrega la segunda entrega: varios agentes, obstáculos, subasta, despacho anticipado, aleatoriedad, combustible, costo J, trace 2.2 y servidor |
 | [`docs/especificacion_primera_entrega.md`](docs/especificacion_primera_entrega.md) | Qué hace el sistema: mundo, reglas, agentes, mensajes, formato del log, métricas, pruebas y contrato entre módulos |
 | [`docs/equipo/README.md`](docs/equipo/README.md) | Contrato de la entrega actual y una guía por persona (la primera entrega, en `docs/equipo/entrega1/`) |
@@ -249,6 +260,7 @@ runs/                    salidas de las corridas (no se versionan)
 | [`docs/ontologia.md`](docs/ontologia.md) | Clases de la ontología del curso, performativas y relación con IEEE 1872 / 1872.2 / 1873 / 7007 |
 | [`docs/autoevaluacion.md`](docs/autoevaluacion.md) | El proyecto frente a los 8 criterios de la rúbrica |
 | `docs/equipo/oswaldo/rutas.md`, `carro.md` | Explicación detallada de las rutas y del carro |
+| `docs/equipo/carlos/mundo.md`, `docs/equipo/emilio/cosechadora.md` | El mundo y la cosechadora de la segunda entrega |
 
 ---
 

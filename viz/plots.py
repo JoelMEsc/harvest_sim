@@ -446,34 +446,44 @@ def tabla_resumen(traces, destino_csv, destino_md, metricas=None):
 
 # --- Sensibilidad (experimentos) ----------------------------------------------------------------
 def grafica_sensibilidad(resumen, parametro, metrica, destino, titulo_metrica=None):
-    """`resumen`: filas de datos.experimentos.resumen_por_grupo. Una línea por escenario: la media de
-    `metrica` contra los valores de `parametro`, con su intervalo de confianza del 95 % (si hay variación)."""
+    """`resumen`: filas de datos.experimentos.resumen_por_grupo. Una línea por escenario (y por estrategia,
+    si el resumen trae varias): la media de `metrica` contra los valores de `parametro`, con su intervalo
+    de confianza del 95 % (si hay variación). Con una sola estrategia la etiqueta es solo el escenario."""
     _estilo()
-    escenarios = list(dict.fromkeys(f["escenario"] for f in resumen))
-    if len(escenarios) > len(SERIES):
-        raise ValueError(f"se pueden graficar hasta {len(SERIES)} escenarios a la vez")
+    estrategias = list(dict.fromkeys(f.get("estrategia") for f in resumen))
+    varias = len(estrategias) > 1
+
+    def etiqueta(f):
+        return f"{f['escenario']} · {f.get('estrategia')}" if varias else f["escenario"]
+
+    series = list(dict.fromkeys(etiqueta(f) for f in resumen))
+    if len(series) > len(SERIES):
+        raise ValueError(f"se pueden graficar hasta {len(SERIES)} series a la vez")
     fig, ax = plt.subplots(figsize=(9, 4.4))
-    for i, e in enumerate(escenarios):
-        filas = sorted((f for f in resumen if f["escenario"] == e and f.get(f"{metrica}_media") is not None),
+    for i, nombre in enumerate(series):
+        filas = sorted((f for f in resumen if etiqueta(f) == nombre and f.get(f"{metrica}_media") is not None),
                        key=lambda f: f[parametro])
         xs = [f[parametro] for f in filas]
         ys = [f[f"{metrica}_media"] for f in filas]
         ic = [f.get(f"{metrica}_ic95") or 0 for f in filas]
+        # con un solo escenario, el color sigue a la estrategia (el mismo de las demás gráficas)
+        un_escenario = len({f["escenario"] for f in resumen}) == 1
+        color = color_estrategia(filas[0].get("estrategia")) if varias and un_escenario and filas else SERIES[i]
         if any(ic):
-            ax.fill_between(xs, [y - d for y, d in zip(ys, ic)], [y + d for y, d in zip(ys, ic)], color=SERIES[i],
+            ax.fill_between(xs, [y - d for y, d in zip(ys, ic)], [y + d for y, d in zip(ys, ic)], color=color,
                             alpha=0.15, linewidth=0)
-        ax.plot(xs, ys, color=SERIES[i], linewidth=2, marker="o", markersize=8, markeredgecolor=SUPERFICIE,
-                markeredgewidth=2, label=e)
-        if len(escenarios) <= 4 and xs:
-            ax.annotate(e, (xs[-1], ys[-1]), xytext=(8, 0), textcoords="offset points", va="center",
+        ax.plot(xs, ys, color=color, linewidth=2, marker="o", markersize=8, markeredgecolor=SUPERFICIE,
+                markeredgewidth=2, label=nombre)
+        if len(series) <= 4 and xs:
+            ax.annotate(nombre, (xs[-1], ys[-1]), xytext=(8, 0), textcoords="offset points", va="center",
                         color=TINTA_2, fontsize=9)
     nombre_metrica = titulo_metrica or metrica.replace("_", " ")
     ax.set_title(f"Sensibilidad: {nombre_metrica} según {parametro.replace('_', ' ')}")
     ax.set_xlabel(parametro.replace("_", " "))
     ax.set_ylabel(nombre_metrica)
     ax.set_ylim(bottom=0)
-    if len(escenarios) > 1:
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=min(len(escenarios), 6))
+    if len(series) > 1:
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=min(len(series), 6))
     return _guardar(fig, destino)
 
 

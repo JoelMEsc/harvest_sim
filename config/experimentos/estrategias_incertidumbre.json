@@ -1,0 +1,32 @@
+{
+  "nombre": "estrategias_incertidumbre",
+  "descripcion": "Las 4 estrategias en D con incertidumbre moderada (rendimiento 1-2, duración extra hasta 1 tick, 10 % de mensajes con hasta 1 tick de retraso): sin incertidumbre D es determinista y las 20 seeds dan lo mismo. E no se incluye: con rendimiento variable una cosechadora puede llenarse frente al único hueco del muro y los dos carros se esperan (limitación conocida, ver docs/resultados_entrega2.md).",
+  "escenarios": [
+    "config/escenario_d.json"
+  ],
+  "estrategias": [
+    "base",
+    "subasta",
+    "anticipada",
+    "anticipada_plus"
+  ],
+  "barrido": {
+    "incertidumbre.rendimiento.maximo": [
+      2
+    ],
+    "incertidumbre.duracion_extra_maxima": [
+      1
+    ],
+    "incertidumbre.retraso_mensajes.probabilidad": [
+      0.1
+    ],
+    "incertidumbre.retraso_mensajes.maximo": [
+      1
+    ]
+  },
+  "seeds": {
+    "desde": 0,
+    "cantidad": 20
+  },
+  "metrica": "tiempo_ocioso_total"
+}
