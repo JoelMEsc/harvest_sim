@@ -1,0 +1,8 @@
+{
+  "nombre": "estrategias",
+  "descripcion": "Experimento principal de la segunda entrega: escenarios D, E y F con las 4 estrategias y 20 seeds; comparación pareada contra la línea base y ablación del costo J.",
+  "escenarios": ["config/escenario_d.json", "config/escenario_e.json", "config/escenario_f.json"],
+  "estrategias": ["base", "subasta", "anticipada", "anticipada_plus"],
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_ocioso_total"
+}

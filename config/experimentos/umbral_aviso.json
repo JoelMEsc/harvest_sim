@@ -1,0 +1,9 @@
+{
+  "nombre": "umbral_aviso",
+  "descripcion": "Sensibilidad del despacho anticipado al umbral de aviso en el escenario D (recurso escaso), con 20 seeds.",
+  "escenarios": ["config/escenario_d.json"],
+  "estrategias": ["anticipada"],
+  "barrido": {"politica.umbral_aviso": [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]},
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_ocioso_total"
+}
