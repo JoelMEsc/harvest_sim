@@ -168,6 +168,23 @@ Formato por entrada:
 - **Por qué se descartó:** la subasta es un protocolo de comunicación entre agentes (tema del curso) y decide con información local de cada carro; recalcular provoca bloqueos mutuos en pasillos; el combustible debe influir en las decisiones para ser una restricción real; el aprendizaje por refuerzo no cabe con una línea base aún creciendo y la rúbrica acepta un costo descompuesto; Unity en otro repositorio mantiene ligero este y permite ciclos de trabajo separados.
 - **Afecta a:** todos (ver `docs/especificacion_segunda_entrega.md` y `docs/equipo/`).
 
+## 2026-11-23 — Rutas en el tiempo y carro contratista: casos no especificados
+- **Estado:** DECIDIDO.
+- **Quién:** Oswaldo (Rutas y carro)
+- **Decisión:**
+  1. **Convención de tiempo:** `(celda, t)` = dónde está el agente al final del tick `t`. En el paso del tick `t` se llama `rutas.bfs_tiempo(pos, destino, t − 1, ...)`; el primer elemento de la ruta es la celda del tick `t`. Cada agente reserva con `mundo.reservar` desde `(pos, t)`.
+  2. **`bfs_tiempo` sin límite artificial:** después del horizonte los estados se colapsan a uno por celda (BFS normal), así que la búsqueda siempre termina y no corta rutas largas. Orden de expansión: esperar, N, E, S, O.
+  3. **Llegada con permanencia:** solo se llega al destino si nadie más lo tiene reservado mientras el agente se queda (`permanencia`; `None` = todo el horizonte). En la bodega la permanencia es la descarga, y se reserva completa aunque pase del horizonte. Parámetro opcional de `bfs_tiempo` y `reservas_de_ruta`; la firma de la guía no cambia.
+  4. **Reglas del carro para no esperarse para siempre:** primer paso nunca a una celda ocupada (R3 conservadora); compromiso con el plan vigente (solo lo cambia por uno que llegue antes); reserva hasta `tick + H + 1`; mientras descarga reserva también su salida; a los agentes quietos se les supone en su celda todo el horizonte; un carro encerrado le pide paso a un carro en viaje que esté en su camino (gana el id menor). Detalle en `docs/equipo/oswaldo/carro.md` §12.
+  5. **Estimaciones deterministas:** el costo de la oferta y el combustible estimado usan `ceil(cantidad / tasa)`, no `mundo.duracion` (que sortea el extra aleatorio y cambiaría la secuencia del generador).
+  6. **Encadenar con la capacidad, no con la carga anunciada:** con despacho anticipado la cosechadora sigue cosechando hasta llenarse.
+  7. **Tipos de mensaje por texto:** el carro compara `tipo` por su valor (`"PROPUESTA"`, …) y crea los mensajes con `TipoMensaje(texto)`; no depende del orden en que se integren el buzón y el carro. Motivo extra de rechazo `"sin_ruta"` si la cosechadora es inalcanzable (no debería pasar).
+  8. **`registro()`** agrega `combustible` solo cuando el mundo ya lo puso (`carro.combustible` no es `None`).
+  9. **Limitación conocida:** con 3 carros o más, la bodega con una sola entrada (carro_1 estacionado en `(1, 0)`) puede dejar a dos carros esperándose; en la prueba de estrés pasó en 36 de 520 corridas con 3 carros y en 0 de 608 con 2. Los escenarios de la entrega usan como máximo 2 carros.
+- **Alternativa considerada:** límite de `4 × (ancho + alto)` ticks; tratar la bodega como estacionamiento (quedarse todo el horizonte); replanear desde cero en cada tick; estimar con `mundo.duracion`; agregar los tipos de mensaje al enum desde la rama del carro.
+- **Por qué se descartó:** el límite puede cortar rutas válidas; la bodega como estacionamiento y el replaneo sin compromiso producían esperas mutuas sin fin en la prueba de estrés (dos carros siguiéndose por un pasillo); `mundo.duracion` consume números aleatorios; el enum es de Emilio.
+- **Afecta a:** Emilio (la cosechadora usa `bfs_tiempo` y `reservas_de_ruta` con la misma convención de tiempo, y debe reservar su celda cuando está quieta), Carlos (`mundo.reservar` debe reemplazar las reservas del agente desde el primer tick de la lista; `mundo.posicion` y `mundo.estado_de` para todos los ids del §3), Ilan (prueba del pasillo), Joel (`combustible` en el registro).
+
 ## 2026-11-24 — Datos de la segunda entrega: formato 2.2, métricas nuevas, comparación pareada y servidor
 - **Estado:** DECIDIDO.
 - **Quién:** Joel (Datos)

@@ -1,18 +1,23 @@
 # `rutas.py` — qué se hizo y cómo explicarlo
 
 **Autor:** Oswaldo · **Rama:** `branch-oswaldo-rutas` · **Archivos:** `src/harvest_sim/rutas.py`, `tests/test_rutas.py`
-**Especificación:** §2 (vecindad, R1, R2, R9), §4.2 (conflictos de celda) y §5.2 (BFS y celda objetivo del carro).
+**Especificación:** primera entrega §2 (vecindad, R1, R2, R9), §4.2 (conflictos de celda) y §5.2 (BFS y celda objetivo del carro); segunda entrega §5 (reservas espacio-tiempo), §7 (costo de la oferta) y §10 (restricciones).
 
-**Resumen:** `rutas.py` es el módulo que sabe moverse por el mapa. Tiene 4 funciones **puras**: no guardan estado, no importan `Mundo` ni a los agentes, y con la misma entrada siempre devuelven lo mismo. Por eso se prueban solas, y el mundo, la cosechadora y el carro las usan sin depender unos de otros.
+**Resumen:** `rutas.py` es el módulo que sabe moverse por el mapa. Todas sus funciones son **puras**: no guardan estado, no importan `Mundo` ni a los agentes, y con la misma entrada siempre devuelven lo mismo. Por eso se prueban solas, y el mundo, la cosechadora y el carro las usan sin depender unos de otros.
 
-| Función | Para qué sirve | Quién la usa |
-|---|---|---|
-| `vecinos` | Las celdas a las que un agente puede moverse en un paso | `Mundo.vecinos`, `bfs` |
-| `bfs` | La ruta más corta de A a B esquivando celdas bloqueadas | `Mundo.ruta_bfs` (cosechadora y carro) |
-| `elegir_celda_objetivo` | Dónde se estaciona el carro junto a la cosechadora | Carro, al recibir `LLENA` |
-| `siguiente_paso` | Un paso por la ruta, resolviendo choques con otros agentes | Carro (y cualquier agente que recalcule ruta) |
+| Función | Para qué sirve | Quién la usa | Entrega |
+|---|---|---|---|
+| `vecinos` | Las celdas a las que un agente puede moverse en un paso | `Mundo.vecinos`, `bfs` | 1 |
+| `bfs` | La ruta más corta de A a B esquivando celdas bloqueadas | `Mundo.ruta_bfs` (cosechadora y carro) | 1 |
+| `elegir_celda_objetivo` | Dónde se estaciona el carro junto a la cosechadora | Carro | 1 |
+| `siguiente_paso` | Un paso por la ruta, resolviendo choques (línea base) | Carro con un solo carro en modo `directa` | 1 |
+| `distancias` | Distancia BFS desde una celda a todas | `estimar_costo`, combustible del carro | 2 |
+| **`bfs_tiempo`** | Ruta en espacio-tiempo que respeta reservas: sin colisiones ni intercambios | Carro y cosechadora (Emilio) | 2 |
+| `reservas_de_ruta` | Lo que un agente reserva a partir de su ruta | Carro y cosechadora | 2 |
+| **`estimar_costo`** | Costo de la oferta en la subasta | Carro (al responder `SOLICITUD_SERVICIO`) | 2 |
+| `clasificar_desvio` | Qué regla del §10 alargó una ruta (R3, R4, R10) | Carro (evento `RESTRICCION`) | 2 |
 
-Estado: **9 de 9 tests pasan** y la suite completa queda en 114 pasados y 44 en skip (antes 105 y 53). Además, se probó con las ramas de Carlos, Emilio e Ilan sin romper nada nuevo.
+Estado: **19 pruebas pasan** (9 de la línea base y 10 nuevas). Las 4 funciones de la primera entrega no cambiaron: A, B y C dan el mismo `trace.json` byte a byte que antes. Las secciones 1 a 8 explican la primera entrega; la **segunda entrega empieza en la §9**.
 
 ---
 
@@ -193,3 +198,85 @@ pytest tests/test_rutas.py -v
 - **¿Qué pasa si dos agentes quieren la misma celda?** Se mueven en orden (primero la cosechadora y luego el carro), y el segundo ya ve al primero en su nueva celda. Para él está ocupada: recalcula o espera. Esa espera cuenta como `ticks_bloqueados`, no como tiempo ocioso.
 - **¿Por qué el carro no se estaciona en la siguiente celda de la serpentina?** Porque al terminar la transferencia la cosechadora querría avanzar justo ahí y quedaría bloqueada.
 - **¿Qué cuesta?** Cada BFS visita cada celda a lo más una vez: `O(ancho × alto)`. `elegir_celda_objetivo` corre a lo más 4 BFS, uno por vecina.
+
+---
+
+# Segunda entrega: rutas en el tiempo
+
+## 9. El problema: dos carros en un pasillo
+
+Con un solo carro bastaba «si la siguiente celda está ocupada, recalcula». Con dos carros en un pasillo de una celda eso falla: los dos recalculan, ninguno cede y se bloquean mutuamente. La propuesta prometió **0 colisiones y 0 bloqueos con 2 carros en un pasillo**. La solución es planear en el **tiempo**: cada agente dice de antemano en qué celda va a estar en cada tick (lo **reserva**) y los demás planean alrededor de esas reservas. Es la idea de *Cooperative A\** (Silver, 2005), con BFS porque todos los pasos cuestan 1.
+
+## 10. Convención de tiempo
+
+Una entrada `(celda, t)` significa «el agente está en `celda` **al final** del tick `t`». En el `paso` del tick `t`, el agente está en `(pos, t − 1)`, así que llama `bfs_tiempo(pos, destino, t − 1, ...)` y el primer elemento de la ruta es la celda donde termina el tick `t`. Esto coincide con `mundo.nuevo_tick(t)`, que borra las reservas con tick `< t`.
+
+## 11. `bfs_tiempo(origen, destino, tick, ancho, alto, bloqueadas, reservas, horizonte=10, permanencia=None)`
+
+**Los nodos son pares `(celda, tick)`.** Desde cada nodo hay hasta 5 acciones, en el orden fijo **esperar, N, E, S, O** (determinista). Un paso de `c1` a `c2` entre `t` y `t + 1` es válido si:
+
+1. `c2` está en el mapa y no en `bloqueadas` (obstáculos, bodega para cosechadoras): **R1, R10**;
+2. mientras `t + 1 ≤ tick + horizonte`: `(c2, t + 1)` **no está reservada** por otro (**R3**) y **no hay intercambio**: si otro agente X tiene `(c2, t)` y `(c1, t + 1)`, no se puede ir de `c1` a `c2` (**R4**: se cruzarían en medio).
+
+```
+   t=0   A . B        A quiere ir a la derecha y B a la izquierda por un pasillo.
+   t=1   . A B   ✗    B reservó (1,0) en t=2: A no puede ir de (1,0) a (2,0)
+   t=2   . B A   ✗    mientras B va de (2,0) a (1,0) → sería un intercambio (R4).
+```
+
+**Llegada válida (permanencia).** No basta con llegar: el agente se va a quedar. Solo se acepta llegar al destino en `t` si nadie más lo tiene reservado en los `permanencia` ticks siguientes. Con `permanencia=None` (se estaciona: base, junto a la cosechadora) se revisa todo el horizonte; en la bodega el carro pasa `permanencia = ceil(carga / tasa_descarga)` ticks, así otro carro puede planear entrar en cuanto él se va.
+
+**Después del horizonte las reservas ya no cuentan.** Los estados se colapsan a uno por celda (`(celda, None)`) y la búsqueda sigue como BFS normal, sin esperas, pero siempre sin obstáculos. Por eso **siempre termina**: hay a lo más `celdas × (horizonte + 1)` estados con tiempo más uno por celda. No hace falta el límite artificial de «4 × (ancho + alto) ticks» que sugería la guía, que además podía cortar rutas válidas en un laberinto.
+
+**Contrato:** `[(celda, t), ...]` sin el origen y con el destino, un elemento por tick (una espera es la misma celda repetida); `[]` si `origen == destino`; `None` si el destino está bloqueado o no hay ruta. Sin reservas, la llegada es exactamente la distancia de `bfs`.
+
+**¿Qué cuesta?** `O(ancho × alto × horizonte)`. En el escenario E (9 × 8) son ≈ 800 estados por búsqueda.
+
+## 12. `reservas_de_ruta(origen, ruta, tick, horizonte, permanencia)`
+
+Convierte una ruta en lo que se reserva: `(origen, tick)`, los pasos hasta `tick + horizonte` y, si la ruta termina antes, la celda final repetida (`permanencia` ticks **completos** aunque pasen del horizonte, o hasta el horizonte si se estaciona). Con `ruta == []` reserva quedarse en `origen`: así un agente quieto también avisa que ahí está.
+
+## 13. `estimar_costo(desde, ticks_ocupado, hacia, ancho, alto, bloqueadas)`
+
+El costo de la oferta en la subasta (§7): `ticks_ocupado` (lo que le falta al carro de su fila de servicios) más la distancia BFS desde `desde` hasta la **vecina libre más cercana** de la cosechadora (no se puede pasar por encima de ella). `0` pasos si ya es vecino; `None` si ninguna vecina es alcanzable.
+
+Ejemplo de las pruebas (mapa 4 × 3): el carro en su base `(1, 0)` ya ganó un servicio en `(2, 1)` y llega una llamada desde `(3, 2)`:
+
+| Política | Fila | Desde dónde sale | Costo |
+|---|---|---|---|
+| base | 1 paso + 2 transferir + 3 a la bodega + 2 descargar + 1 a su base = 9 | su base, 3 pasos | **12** |
+| `encadenar_servicios` | 1 + 2 = 3 (le cabe, no pasa por la bodega) | junto a `(2, 1)`, 1 paso | **4** |
+| `atender_desde_bodega` | 1 + 2 + 3 + 2 = 8 | la bodega, 4 pasos | **12** |
+
+## 14. `clasificar_desvio(...)`
+
+Para el evento `RESTRICCION` (§10, IEEE 7007) hay que saber **qué regla cambió la ruta**. Se compara cuánto tarda en llegar en cuatro versiones del problema:
+
+| Comparación | Regla |
+|---|---|
+| BFS con obstáculos más largo que sin obstáculos | `R10_obstaculo` |
+| ruta en el tiempo (sin chequeo de intercambio) más larga que la espacial | `R3_celda_ocupada` |
+| ruta en el tiempo completa más larga que sin chequeo de intercambio | `R4_intercambio` |
+
+Rodear la bodega no es R10 (no es un obstáculo). Si no hay ruta, no es un desvío: es un `BLOQUEO`.
+
+## 15. Las pruebas nuevas (`tests/test_rutas.py`)
+
+| Prueba | Qué verifica |
+|---|---|
+| `test_bfs_tiempo_sin_reservas_es_la_ruta_mas_corta` | Para todos los pares de un mapa 5 × 4, con y sin muro: llegada = distancia BFS, determinista, `[]` y `None` como `bfs` |
+| `test_bfs_tiempo_respeta_reservas` | **El pasillo**: dos rutas opuestas por un hueco de 1 celda; la segunda espera, ninguna `(celda, t)` se repite y no hay intercambio |
+| `test_bfs_tiempo_no_se_intercambia` | R4 en un mapa 2 × 1 (no hay ruta) y en 3 × 2 (rodea por abajo) |
+| `test_bfs_tiempo_espera_y_horizonte` | Espera en vez de entrar a una celda reservada; reservas fuera del horizonte no cuentan |
+| `test_bfs_tiempo_nunca_pisa_bloqueadas_ni_reservas` | Propiedad R1, R2, R3, R4, R10 en todas las rutas de un mapa con obstáculos y otro agente |
+| `test_bfs_tiempo_permanencia` | Con permanencia corta cabe antes de que llegue otro; con larga, no |
+| `test_reservas_de_ruta_recorta_y_rellena` | Recorta en el horizonte, rellena la celda final y reserva la estancia completa |
+| `test_distancias`, `test_estimar_costo`, `test_clasificar_desvio` | Casos calculados a mano |
+
+## 16. Preguntas que te pueden hacer (segunda entrega)
+
+- **¿Por qué BFS en el tiempo y no A\*?** Todos los pasos cuestan 1 tick, así que BFS ya da la ruta que llega antes. A\* convendría en mapas grandes; el espacio aquí es de cientos de estados.
+- **¿Por qué el orden «esperar primero»?** Entre dos rutas que llegan al mismo tiempo, prefiere esperar a dar una vuelta: gasta menos combustible y se mueve menos.
+- **¿Qué es el horizonte?** Cuántos ticks hacia adelante cuentan las reservas (10). Más allá el futuro es incierto: cada agente replanea en cada tick, así que no tiene sentido planear el tick 50 con precisión.
+- **¿Una espera es un bloqueo?** No. Esperar porque la ruta en el tiempo lo decidió es parte del plan. `BLOQUEO` es solo cuando no hay ninguna ruta aunque sin otros agentes sí la habría.
+- **¿Cómo garantizan que no chocan?** Tres capas: las reservas (nadie planea entrar a una `(celda, t)` ajena), el chequeo de intercambio, y una regla conservadora en el carro: su primer paso nunca entra a una celda ocupada ahora mismo, aunque ese agente no haya reservado. Con esto se probaron 1128 corridas aleatorias con dobles (2 y 3 carros, las 4 estrategias) sin una sola colisión (ver `carro.md` §13).
