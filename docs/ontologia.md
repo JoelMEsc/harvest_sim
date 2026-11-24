@@ -16,6 +16,15 @@ En el proyecto aparece en tres lugares: los nombres del diseño, las etiquetas d
 
 Un mensaje del trace se lee como un mensaje KQML: `(request :sender cosechadora_1 :receiver carro_1 :content (LLENA x=3 y=1 carga=4))`. La `performativa` es el tipo de acto, `de` y `a` son emisor y receptor, `tipo_mensaje` y `payload` son el contenido, y el vocabulario es esta ontología.
 
+## Segunda entrega: subasta, seguridad y sostenibilidad en el log
+
+| Concepto | En el log (trace 2.2) | Relación con la ontología |
+|---|---|---|
+| Protocolo Contract Net | Mensajes `SOLICITUD_SERVICIO` (`cfp`), `PROPUESTA` (`propose`), `RECHAZO` (`refuse`), `ACEPTACION` (`accept-proposal`), `RECHAZO_PROPUESTA` (`reject-proposal`) y `TRANSFERENCIA_TERMINADA` (`inform`) | Actos comunicativos de FIPA-ACL entre *AutonomousAgriculturalRobot*: la cosechadora administra el servicio y los carros ofertan |
+| Restricción de seguridad aplicada | Evento `RESTRICCION` con su `regla` (`R3_celda_ocupada`, `R4_intercambio`, `R9_bodega`, `R10_obstaculo`, `combustible_reserva`) | Cada *SafetyConstraint* que cambió una decisión queda en el *AccountabilityRecord*: la supervisión puede auditar qué regla actuó, cuándo y sobre qué agente (IEEE 7007) |
+| Sostenibilidad | Campo `combustible` de cada agente y evento `RECARGA` | Consumo y recargas medidos y reportados (métricas `combustible_usado`, `combustible_comprado`, `recargas`), como pide la rúbrica de ética y sostenibilidad |
+| Celda con rendimiento | `mundo.rendimiento` y `CELDA_COSECHADA.cantidad` | Atributo de la *SemanticMapCell* de campo |
+
 ## Tareas y relaciones
 
 - **Tareas** del robot: cosechar (cosechadora), transportar y descargar (carro), transferir (las dos). Cada estado de las máquinas de estados (§5 de la especificación) corresponde a una tarea o a una espera.

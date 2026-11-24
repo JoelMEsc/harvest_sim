@@ -167,3 +167,18 @@ Formato por entrada:
 - **Alternativa considerada:** carro libre más cercano o fila global; seguir recalculando rutas ante celdas ocupadas; combustible solo desde el log; aprendizaje por refuerzo; traer Unity a este repositorio.
 - **Por qué se descartó:** la subasta es un protocolo de comunicación entre agentes (tema del curso) y decide con información local de cada carro; recalcular provoca bloqueos mutuos en pasillos; el combustible debe influir en las decisiones para ser una restricción real; el aprendizaje por refuerzo no cabe con una línea base aún creciendo y la rúbrica acepta un costo descompuesto; Unity en otro repositorio mantiene ligero este y permite ciclos de trabajo separados.
 - **Afecta a:** todos (ver `docs/especificacion_segunda_entrega.md` y `docs/equipo/`).
+
+## 2026-11-24 — Datos de la segunda entrega: formato 2.2, métricas nuevas, comparación pareada y servidor
+- **Estado:** DECIDIDO.
+- **Quién:** Joel (Datos)
+- **Decisión:**
+  1. **Formato 2.2** en `datos/formato.py`: 7 tipos de mensaje con su performativa, claves obligatorias de cada payload (error si faltan), motivos de rechazo (`sin_capacidad`, `combustible`, `sin_ruta`) y reglas de `RESTRICCION`; un motivo o una regla desconocidos son **aviso**, no error. `combustible` en el registro es opcional (solo si la simulación lo modela). `CELDA_COSECHADA.cantidad` es opcional: si falta, se usa el rendimiento de la celda. El validador acepta 2.1 y 2.2 y toma el retraso máximo de mensajes de la configuración del trace.
+  2. **Métricas nuevas** (al final, sin cambiar las de v0.1): `tiempo_ocioso_total`; combustible usado = inicial − final + recargado, comprado = inicial + recargado, recargas y mínimo (al final de cada tick); restricciones por regla y por agente; servicios, propuestas por servicio, rechazos por motivo y respuesta promedio (ticks desde la primera llamada de un servicio hasta que empieza su transferencia); servicios ganados por carro.
+  3. **`num_ciclos`** pasa a contar transferencias terminadas: en la línea base es igual al número de `LLENA` y sigue siendo correcto con la subasta.
+  4. **Costo J** = suma de peso · valor de cada término (tiempo, distancia, colisiones, ocio total, combustible usado, restricciones), con los pesos de `config.costo.pesos` o los por defecto; cada término se reporta por separado.
+  5. **Comparación pareada por seed** contra `base`: diferencia estrategia − base seed por seed, IC 95 % con t de Student y veredicto (mejora, empeora, igual, no concluyente si el IC cruza el 0, informativa). **Ablación de J**: orden de las estrategias con cada término quitado.
+  6. **Traces de ejemplo 2.2** escritos como guion (`tools/traces_ejemplo_22.py`), no extendiendo el generador.
+  7. **Servidor FastAPI** con simulador inyectable y modo de ejemplo; dependencias fijas (fastapi 0.115.6, uvicorn 0.32.1, httpx 0.28.1).
+- **Alternativa considerada:** `cantidad` obligatoria en 2.2; comparar medias sin emparejar; extender el generador con la subasta; contar `num_ciclos` como mensajes `LLENA`.
+- **Por qué se descartó:** `cantidad` obligatoria rompía las corridas mientras `mundo.cosechar` no la envíe; sin emparejar, la variación entre seeds ensancha los intervalos; el generador duplicaría la lógica de Emilio y Oswaldo; con la subasta no hay `LLENA` y la métrica valdría 0.
+- **Afecta a:** Emilio y Oswaldo (importar tipos y performativas de `datos.formato`), Carlos (`cantidad` y `combustible` opcionales), Mario Giovanni (traces de ejemplo, servidor, `ESTRATEGIAS`), Ilan (dependencias del CI).
