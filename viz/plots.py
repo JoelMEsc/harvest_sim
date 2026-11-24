@@ -477,9 +477,181 @@ def grafica_sensibilidad(resumen, parametro, metrica, destino, titulo_metrica=No
     return _guardar(fig, destino)
 
 
+# --- 7. Combustible (segunda entrega) -----------------------------------------------------------
+def grafica_combustible(trace, destino, ruta=None, linea=None, series=None):
+    """Nivel del tanque de cada agente por tick, con la línea de reserva de cada tipo y un punto en cada
+    recarga. Un color por agente (orden fijo del catálogo); se identifica también por la etiqueta final."""
+    _estilo()
+    linea = linea or linea_de_tiempo(trace)
+    s = series or series_temporales(linea)
+    con_combustible = [a for a in linea.ids() if "combustible" in s["por_agente"][a]]
+    if not con_combustible:
+        raise ValueError("el trace no trae combustible (formato 2.2 con combustible)")
+    config = (trace.get("config") or {}).get("combustible") or {}
+    tipo_de = {a["id"]: a.get("tipo") for a in linea.agentes}
+    recargas = {}
+    for t in linea.ticks:
+        for ev in linea.eventos[t]:
+            if ev["tipo"] == "RECARGA":
+                recargas.setdefault(ev["agente"], []).append((t, ev["nivel"]))
+    fig, ax = plt.subplots(figsize=(10, 4.6))
+    for tipo in sorted({tipo_de.get(a) for a in con_combustible}, key=str):
+        tanque, reserva = config.get(f"tanque_{tipo}"), config.get("reserva")
+        if tanque and reserva:
+            ax.axhline(tanque * reserva, color=TINTA_TENUE, linewidth=1, linestyle="--", zorder=1)
+            ax.text(0.01, tanque * reserva, f"reserva {tipo} ({tanque * reserva:g} L)", ha="left", va="bottom",
+                    color=TINTA_2, fontsize=8, transform=ax.get_yaxis_transform())
+    maximo, finales = 1, []
+    for i, a in enumerate(con_combustible):
+        color = SERIES[i % len(SERIES)]
+        niveles = [float("nan") if c is None else c for c in s["por_agente"][a]["combustible"]]
+        ax.step(s["tick"], niveles, where="post", color=color, linewidth=2, label=a, zorder=3)
+        puntos = recargas.get(a, [])
+        if puntos:
+            ax.plot([t for t, _ in puntos], [n for _, n in puntos], linestyle="none", marker="o", markersize=7,
+                    color=color, markeredgecolor=SUPERFICIE, markeredgewidth=1.5, zorder=4)
+        validos = [c for c in s["por_agente"][a]["combustible"] if c is not None]
+        maximo = max(maximo, max(validos))
+        finales.append((validos[-1], a))
+    # Etiqueta al final de cada línea solo si no choca con otra (si no, basta la leyenda).
+    separacion = maximo * 0.05
+    for nivel, a in finales:
+        if sum(1 for otro, _ in finales if abs(otro - nivel) < separacion) == 1 and len(finales) <= 4:
+            ax.annotate(a, (s["tick"][-1], nivel), xytext=(6, 0), textcoords="offset points", va="center",
+                        color=TINTA_2, fontsize=8)
+    ax.set_title(f"Combustible en el tanque (puntos: recargas en la base) — {nombre_escenario(trace, ruta)}")
+    ax.set_xlabel("Tick")
+    ax.set_ylabel("Litros")
+    ax.set_xlim(0, s["tick"][-1] or 1)
+    ax.set_ylim(0, maximo * 1.12)
+    if len(con_combustible) > 1:
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=min(4, len(con_combustible)))
+    return _guardar(fig, destino)
+
+
+# --- Experimentos con estrategias (segunda entrega) ---------------------------------------------
+METRICAS_ESTRATEGIAS = [
+    ("tiempo_ocioso_total", "Tiempo ocioso total\n(ticks)"),
+    ("tiempo_completacion", "Tiempo de completación\n(ticks)"),
+    ("combustible_usado", "Combustible usado\n(litros)"),
+    ("costo_total", "Costo J\n(unidades de costo)"),
+]
+
+
+def _orden_estrategias(filas):
+    return list(dict.fromkeys(f["estrategia"] for f in filas if f.get("estrategia")))
+
+
+def color_estrategia(estrategia):
+    """Color fijo de cada estrategia, en el orden de ESTRATEGIAS (el color sigue a la estrategia, no a su
+    posición en la gráfica)."""
+    from harvest_sim.datos.experimentos import ESTRATEGIAS
+    orden = list(ESTRATEGIAS)
+    i = orden.index(estrategia) if estrategia in orden else len(orden) + hash(estrategia) % 2
+    return SERIES[i % len(SERIES)]
+
+
+def grafica_estrategias(resumen, destino, metricas=None):
+    """Barras por estrategia con IC 95 %, un panel por métrica y escenario en el eje x. Un color fijo por
+    estrategia (orden de ESTRATEGIAS)."""
+    _estilo()
+    metricas = [(m, t) for m, t in (metricas or METRICAS_ESTRATEGIAS) if any(r.get(f"{m}_media") is not None
+                                                                           for r in resumen)]
+    estrategias = _orden_estrategias(resumen)
+    escenarios = list(dict.fromkeys(r["escenario"] for r in resumen))
+    if not metricas or not estrategias:
+        raise ValueError("el resumen no tiene estrategias ni métricas para graficar")
+    columnas = min(2, len(metricas))
+    filas_fig = -(-len(metricas) // columnas)
+    fig, ejes = plt.subplots(filas_fig, columnas, figsize=(6.2 * columnas, 3.8 * filas_fig), squeeze=False)
+    ancho = 0.8 / len(estrategias)
+    for ax, (m, titulo) in zip(ejes.flat, metricas):
+        for i, e in enumerate(estrategias):
+            medias, ics = [], []
+            for esc in escenarios:
+                r = next((r for r in resumen if r["escenario"] == esc and r.get("estrategia") == e), {})
+                medias.append(r.get(f"{m}_media") or 0)
+                ics.append(r.get(f"{m}_ic95") or 0)
+            xs = [j + (i - (len(estrategias) - 1) / 2) * ancho for j in range(len(escenarios))]
+            ax.bar(xs, medias, width=ancho * 0.92, color=color_estrategia(e), edgecolor=SUPERFICIE,
+                   linewidth=1.5, label=e, zorder=3)
+            ax.errorbar(xs, medias, yerr=ics, fmt="none", ecolor=TINTA_2, elinewidth=1.2, capsize=3, zorder=4)
+        ax.set_title(titulo, fontsize=10)
+        ax.set_xticks(range(len(escenarios)))
+        ax.set_xticklabels([_etiqueta_escenario(e) for e in escenarios])
+        ax.grid(axis="x", visible=False)
+        ax.set_ylim(bottom=0)
+    for ax in list(ejes.flat)[len(metricas):]:
+        ax.set_visible(False)
+    asas = [Patch(facecolor=color_estrategia(e), edgecolor=SUPERFICIE, label=e) for e in estrategias]
+    fig.legend(handles=asas, loc="lower center", ncol=len(asas))
+    fig.suptitle("Estrategias por escenario (media e IC 95 %)", x=0.01, ha="left", fontweight="bold")
+    fig.tight_layout(rect=(0, 0.06, 1, 0.95))
+    return _guardar(fig, destino)
+
+
+def grafica_costo_j(filas, destino):
+    """J medio por estrategia y escenario, apilado por término (cuánto aporta cada término)."""
+    _estilo()
+    estrategias = _orden_estrategias(filas)
+    escenarios = list(dict.fromkeys(f["escenario"] for f in filas))
+    terminos = [t for t in ("ocio", "tiempo", "distancia", "combustible", "restricciones", "colisiones")
+                if any(f.get(f"costo_{t}") for f in filas)]
+    if not estrategias or not terminos:
+        raise ValueError("las filas no traen estrategias ni términos de J")
+    etiquetas = [f"{_etiqueta_escenario(esc)} · {e}" for esc in escenarios for e in estrategias]
+    fig, ax = plt.subplots(figsize=(max(8, 0.7 * len(etiquetas) + 2), 4.8))
+    abajo = [0.0] * len(etiquetas)
+    for k, t in enumerate(terminos):
+        valores = []
+        for esc in escenarios:
+            for e in estrategias:
+                grupo = [f.get(f"costo_{t}") or 0 for f in filas if f["escenario"] == esc and f.get("estrategia") == e]
+                valores.append(sum(grupo) / len(grupo) if grupo else 0)
+        ax.bar(range(len(etiquetas)), valores, bottom=abajo, width=0.7, color=SERIES[k % len(SERIES)],
+               edgecolor=SUPERFICIE, linewidth=1.5, label=t, zorder=3)
+        abajo = [a + v for a, v in zip(abajo, valores)]
+    for x, total in enumerate(abajo):
+        ax.text(x, total, _formato_corto(total), ha="center", va="bottom", color=TINTA_2, fontsize=8)
+    ax.set_xticks(range(len(etiquetas)))
+    ax.set_xticklabels(etiquetas, rotation=35, ha="right", fontsize=8)
+    ax.grid(axis="x", visible=False)
+    ax.set_ylabel("J medio (unidades de costo)")
+    ax.set_title("Costo J por término (media sobre las seeds)")
+    ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0))
+    return _guardar(fig, destino)
+
+
+def grafica_diferencias(comparacion, destino, metrica="tiempo_ocioso_total"):
+    """Diferencia media contra la línea base (estrategia − base, pareada por seed) con su IC 95 %.
+    A la izquierda del 0 es menos que la base. Un punto por escenario y estrategia."""
+    _estilo()
+    filas = [c for c in comparacion if c["metrica"] == metrica and c.get("diferencia") is not None]
+    if not filas:
+        raise ValueError(f"no hay comparación de {metrica!r}")
+    estrategias = _orden_estrategias(filas)
+    fig, ax = plt.subplots(figsize=(9, 0.55 * len(filas) + 1.6))
+    etiquetas = []
+    for y, c in enumerate(filas):
+        color = color_estrategia(c["estrategia"])
+        ax.errorbar(c["diferencia"], y, xerr=c["ic95"], fmt="o", color=color, ecolor=color, markersize=8,
+                    markeredgecolor=SUPERFICIE, markeredgewidth=1.5, capsize=4, zorder=3)
+        ax.annotate(c["veredicto"], (c["diferencia"] + c["ic95"], y), xytext=(6, 0), textcoords="offset points",
+                    va="center", color=TINTA_2, fontsize=8)
+        etiquetas.append(f"{_etiqueta_escenario(c['escenario'])} · {c['estrategia']}")
+    ax.axvline(0, color=TINTA_TENUE, linewidth=1, zorder=1)
+    ax.set_yticks(range(len(filas)))
+    ax.set_yticklabels(etiquetas, fontsize=9)
+    ax.invert_yaxis()
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel(f"Diferencia contra la base en {metrica.replace('_', ' ')} (estrategia − base)")
+    ax.set_title("Diferencia contra la línea base (media e IC 95 %, pareada por seed)")
+    return _guardar(fig, destino)
+
+
 # --- Orquestación -------------------------------------------------------------------------------
 def graficas_de_un_trace(ruta_trace, carpeta=None, agente=None, trace=None):
-    """Las 6 gráficas de un trace.json, con una sola pasada por el trace. Devuelve las rutas generadas."""
+    """Las 6 gráficas de un trace.json (7 si trae combustible), con una sola pasada por el trace."""
     trace = trace or cargar_trace(ruta_trace)
     carpeta = Path(carpeta) if carpeta else Path(ruta_trace).resolve().parent / "plots"
     linea = linea_de_tiempo(trace)
@@ -493,7 +665,8 @@ def graficas_de_un_trace(ruta_trace, carpeta=None, agente=None, trace=None):
         grafica_flujo_grano(trace, carpeta / n[4], ruta_trace, linea, s),
         grafica_mapa(trace, carpeta / n[5], "espera", ruta_trace, linea),
         grafica_mapa(trace, carpeta / n[6], "trafico", ruta_trace, linea),
-    ]
+    ] + ([grafica_combustible(trace, carpeta / "7_combustible.png", ruta_trace, linea, s)]
+         if any("combustible" in d for d in s["por_agente"].values()) else [])
 
 
 def main(argv=None):

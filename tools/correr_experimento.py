@@ -117,6 +117,14 @@ def main(argv=None) -> int:
         generados.append(escribir_csv(comparar_contra_base(filas, parametros=parametros), carpeta / "comparacion.csv"))
     if estrategias and any(f.get("costo_total") is not None for f in filas):
         generados.append(escribir_csv(ablacion_costo(filas, parametros), carpeta / "ablacion.csv"))
+    if estrategias:
+        plots = _cargar_script(RAIZ / "viz" / "plots.py")
+        generados.append(plots.grafica_estrategias(resumen, carpeta / "estrategias.png"))
+        if any(f.get("costo_total") is not None for f in filas):
+            generados.append(plots.grafica_costo_j(filas, carpeta / "costo_j.png"))
+        if "base" in estrategias and len(estrategias) > 1 and not parametros:
+            generados.append(plots.grafica_diferencias(comparar_contra_base(filas), carpeta / "diferencias.png",
+                                                       exp.get("metrica", "tiempo_ocioso_total")))
     if len(parametros) == 1:
         plots = _cargar_script(RAIZ / "viz" / "plots.py")
         metrica = exp.get("metrica", "tiempo_ocioso_cosechadora")
