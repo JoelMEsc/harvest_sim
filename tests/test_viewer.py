@@ -277,9 +277,19 @@ def test_cli_sobrescribe_seed_y_estrategia_sin_cambiar_config_original(cli_prepa
     assert original.seed == 0 and original.politica == {"asignacion": "directa", "espera_propuestas": 2}
 
 
-def test_cli_rechaza_seed_negativa_y_estrategia_sin_contrato(cli_preparada, tmp_path, capsys):
+def test_cli_rechaza_seed_negativa_y_estrategia_sin_contrato(cli_preparada, monkeypatch, tmp_path, capsys):
+    from harvest_sim.datos import experimentos
+
     cli, _, _ = cli_preparada
     assert cli.main(["config.json", "--salida", str(tmp_path), "--seed", "-1"]) == 1
     assert "--seed" in capsys.readouterr().err
+    # sin el contrato de Datos (ESTRATEGIAS) la CLI lo dice; la prueba no depende de que ya exista
+    with monkeypatch.context() as m:
+        m.delattr(experimentos, "ESTRATEGIAS", raising=False)
+        assert cli.main(["config.json", "--salida", str(tmp_path), "--estrategia", "subasta"]) == 1
+        assert "ESTRATEGIAS" in capsys.readouterr().err
+    # con el contrato, pero con una configuración sin politica, el error nombra la politica
+    m2 = {"subasta": {"politica": {"asignacion": "subasta"}}}
+    monkeypatch.setattr(experimentos, "ESTRATEGIAS", m2, raising=False)
     assert cli.main(["config.json", "--salida", str(tmp_path), "--estrategia", "subasta"]) == 1
-    assert "ESTRATEGIAS" in capsys.readouterr().err
+    assert "politica" in capsys.readouterr().err
