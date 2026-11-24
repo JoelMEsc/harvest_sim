@@ -18,11 +18,14 @@ from __future__ import annotations
 
 from .campo import grano_esperado
 from .formato import (
+    ACEPTACION,
     CARRO,
     COSECHADORA,
     EN_BASE,
-    LLENA,
     LLENA_ESPERANDO,
+    PROPUESTA,
+    RECHAZO,
+    SOLICITUD_SERVICIO,
     TRANSFERENCIA_TERMINADA,
     TRANSFIRIENDO,
 )
@@ -115,7 +118,8 @@ def calcular_metricas(fuente) -> dict:
     - porcentaje_ocioso (promedio): ticks ociosos entre T, en % (2 decimales).
     - tiempo_transfiriendo (promedio): ticks en TRANSFIRIENDO.
     - espera_promedio_por_ciclo: largo medio de las rachas de LLENA_ESPERANDO de todas las cosechadoras.
-    - num_ciclos (total): mensajes LLENA enviados.
+    - num_ciclos (total): transferencias terminadas (TRANSFERENCIA_TERMINADA enviados); en la línea base es igual
+      al número de LLENA, y sigue valiendo con la subasta.
     - distancia_cosechadora / distancia_carro (promedio): ticks en que la celda del agente cambió.
     - distancia_total (total): suma de la distancia de todos los agentes.
     - distancia_cosechadora_carro_promedio / _minima / _maxima: sobre cada cosechadora y cada tick, al carro más cercano.
@@ -125,6 +129,17 @@ def calcular_metricas(fuente) -> dict:
     - mensajes_enviados (total): {tipo_mensaje: n}.
     - grano_cosechado_total, grano_total_entregado, grano_esperado_total (campo.grano_esperado) y
       porcentaje_entregado (entregado / esperado, en %, 2 decimales; None si no se conoce el esperado).
+      El grano cosechado suma `cantidad` de cada CELDA_COSECHADA (2.2) o el rendimiento de la celda.
+    Segunda entrega (decisiones del 2026-11-24; None o vacío si el trace no trae esos datos):
+    - tiempo_ocioso_total: ticks en LLENA_ESPERANDO sumados entre todas las cosechadoras (lo usa J).
+    - combustible_usado, combustible_comprado, recargas, combustible_minimo (totales; por agente en por_agente):
+      usado = inicial − final + recargado; comprado = nivel inicial + recargado (se paga lo que se carga);
+      mínimo = el menor nivel al final de un tick (el log no ve el nivel dentro del tick).
+    - restricciones (total) y restricciones_por_regla ({regla: n}).
+    - servicios (llamadas SOLICITUD_SERVICIO distintas), propuestas_por_servicio (media), rechazos_por_motivo,
+      respuesta_promedio (ticks desde la primera llamada de un servicio hasta que su cosechadora empieza a
+      transferir).
+    - costo: {"pesos", "terminos": {nombre: peso · valor}, "total"} y costo_total (J, especificación §11).
     - por_agente: {agent_id: {...}} con el detalle de cada agente (incluye ticks_por_estado y espera_por_ciclo).
     """
     linea = linea_de_tiempo(fuente)
@@ -134,18 +149,41 @@ def calcular_metricas(fuente) -> dict:
 
     bloqueos = {a: 0 for a in linea.ids()}
     mensajes: dict[str, int] = {}
-    llenas_por_agente: dict[str, int] = {}
+    ciclos_por_agente: dict[str, int] = {}
     terminadas = []
+    restricciones_por_agente: dict[str, int] = {}
+    restricciones_por_regla: dict[str, int] = {}
+    recargado: dict[str, float] = {}
+    recargas_por_agente: dict[str, int] = {}
+    llamadas: dict[str, tuple[int, str]] = {}   # servicio -> (tick de la primera llamada, cosechadora)
+    propuestas = 0
+    rechazos_por_motivo: dict[str, int] = {}
+    ganados: dict[str, int] = {}
     for t in linea.ticks:
         for ev in linea.eventos[t]:
             if ev["tipo"] == "BLOQUEO":
                 bloqueos[ev["agente"]] = bloqueos.get(ev["agente"], 0) + 1
+            elif ev["tipo"] == "RESTRICCION":
+                restricciones_por_agente[ev["agente"]] = restricciones_por_agente.get(ev["agente"], 0) + 1
+                restricciones_por_regla[ev["regla"]] = restricciones_por_regla.get(ev["regla"], 0) + 1
+            elif ev["tipo"] == "RECARGA":
+                recargado[ev["agente"]] = recargado.get(ev["agente"], 0) + ev["cantidad"]
+                recargas_por_agente[ev["agente"]] = recargas_por_agente.get(ev["agente"], 0) + 1
             elif ev["tipo"] == "MENSAJE_ENVIADO":
-                mensajes[ev["tipo_mensaje"]] = mensajes.get(ev["tipo_mensaje"], 0) + 1
-                if ev["tipo_mensaje"] == LLENA:
-                    llenas_por_agente[ev["de"]] = llenas_por_agente.get(ev["de"], 0) + 1
-                elif ev["tipo_mensaje"] == TRANSFERENCIA_TERMINADA:
+                tipo_m = ev["tipo_mensaje"]
+                mensajes[tipo_m] = mensajes.get(tipo_m, 0) + 1
+                if tipo_m == TRANSFERENCIA_TERMINADA:
                     terminadas.append(t)
+                    ciclos_por_agente[ev["de"]] = ciclos_por_agente.get(ev["de"], 0) + 1
+                elif tipo_m == SOLICITUD_SERVICIO:
+                    llamadas.setdefault(ev["payload"].get("servicio"), (t, ev["de"]))
+                elif tipo_m == PROPUESTA:
+                    propuestas += 1
+                elif tipo_m == RECHAZO:
+                    motivo = ev["payload"].get("motivo")
+                    rechazos_por_motivo[motivo] = rechazos_por_motivo.get(motivo, 0) + 1
+                elif tipo_m == ACEPTACION:
+                    ganados[ev["a"]] = ganados.get(ev["a"], 0) + 1
 
     por_agente: dict[str, dict] = {}
     todas_las_esperas: list[int] = []
@@ -164,7 +202,7 @@ def calcular_metricas(fuente) -> dict:
                 tiempo_ocioso=ocioso,
                 porcentaje_ocioso=round(100 * ocioso / T, 2),
                 tiempo_transfiriendo=estados.get(TRANSFIRIENDO, 0),
-                num_ciclos=llenas_por_agente.get(a, 0),
+                num_ciclos=ciclos_por_agente.get(a, 0),
                 espera_por_ciclo=esperas,
                 distancia=_distancia_recorrida(linea, a),
                 distancia_al_carro_promedio=_promedio(al_carro),
@@ -176,7 +214,12 @@ def calcular_metricas(fuente) -> dict:
             )
         else:
             detalle.update(distancia=_distancia_recorrida(linea, a))
+        if tipo == CARRO and llamadas:
+            detalle["servicios_ganados"] = ganados.get(a, 0)
         detalle.update(ticks_bloqueados=bloqueos.get(a, 0), ticks_por_estado=estados)
+        detalle.update(_combustible(linea, a, recargado.get(a, 0.0), recargas_por_agente.get(a, 0)))
+        if restricciones_por_agente or restricciones_por_regla:
+            detalle["restricciones"] = restricciones_por_agente.get(a, 0)
         por_agente[a] = detalle
 
     def de(ids, clave):
@@ -184,9 +227,20 @@ def calcular_metricas(fuente) -> dict:
 
     entregado = linea.entregado[-1]
     esperado = grano_esperado(linea.mundo)
-    grano = linea.mundo.get("grano_por_celda", 1)
     ocioso_total = sum(de(cosechadoras, "tiempo_ocioso"))
-    return {
+    con_combustible = [d for d in por_agente.values() if d.get("combustible_usado") is not None]
+
+    def total(clave, decimales=2):
+        return round(sum(d[clave] for d in con_combustible), decimales) if con_combustible else None
+
+    respuestas = []
+    for servicio, (tick_llamada, cosechadora) in llamadas.items():
+        estados_h = linea.estado.get(cosechadora, [])
+        inicio = next((t for t in range(tick_llamada + 1, linea.num_ticks)
+                       if estados_h[t] == TRANSFIRIENDO and estados_h[t - 1] != TRANSFIRIENDO), None)
+        if inicio is not None:
+            respuestas.append(inicio - tick_llamada)
+    metricas = {
         "agentes": {"cosechadoras": len(cosechadoras), "carros": len(carros)},
         "tiempo_completacion": linea.total_ticks,
         "tick_fin_cosecha": max(terminadas) if terminadas else None,
@@ -194,7 +248,7 @@ def calcular_metricas(fuente) -> dict:
         "porcentaje_ocioso": round(100 * ocioso_total / (T * len(cosechadoras)), 2) if cosechadoras else None,
         "tiempo_transfiriendo": _promedio(de(cosechadoras, "tiempo_transfiriendo")),
         "espera_promedio_por_ciclo": _promedio(todas_las_esperas),
-        "num_ciclos": mensajes.get(LLENA, 0),
+        "num_ciclos": len(terminadas),
         "distancia_cosechadora": _promedio(de(cosechadoras, "distancia")),
         "distancia_carro": _promedio(de(carros, "distancia")),
         "distancia_total": sum(d["distancia"] for d in por_agente.values()),
@@ -205,12 +259,55 @@ def calcular_metricas(fuente) -> dict:
         "ticks_bloqueados": sum(bloqueos.values()),
         "colisiones": _colisiones(linea),
         "mensajes_enviados": mensajes,
-        "grano_cosechado_total": linea.cosechadas[-1] * grano,
+        "grano_cosechado_total": linea.grano_cosechado[-1],
         "grano_total_entregado": entregado,
         "grano_esperado_total": esperado,
         "porcentaje_entregado": round(100 * entregado / esperado, 2) if esperado else None,
-        "por_agente": por_agente,
+        "tiempo_ocioso_total": ocioso_total,
+        "combustible_usado": total("combustible_usado"),
+        "combustible_comprado": total("combustible_comprado"),
+        "recargas": sum(d["recargas"] for d in con_combustible) if con_combustible else None,
+        "combustible_minimo": (min(d["combustible_minimo"] for d in con_combustible) if con_combustible else None),
+        "restricciones": sum(restricciones_por_regla.values()),
+        "restricciones_por_regla": restricciones_por_regla,
+        "servicios": len(llamadas) if llamadas else None,
+        "propuestas_por_servicio": _numero(propuestas / len(llamadas)) if llamadas else None,
+        "rechazos_por_motivo": rechazos_por_motivo,
+        "respuesta_promedio": _promedio(respuestas),
     }
+    metricas["costo"] = costo_j(metricas, linea.config)
+    metricas["costo_total"] = metricas["costo"]["total"]
+    metricas["por_agente"] = por_agente
+    return metricas
+
+
+# Pesos por defecto de J (especificación de la segunda entrega §2 y §11).
+PESOS_COSTO = {"tiempo": 1.0, "distancia": 0.5, "colisiones": 1000.0, "ocio": 5.0, "combustible": 0.2,
+               "restricciones": 10.0}
+# Métrica de la que sale cada término de J.
+TERMINOS_COSTO = {"tiempo": "tiempo_completacion", "distancia": "distancia_total", "colisiones": "colisiones",
+                  "ocio": "tiempo_ocioso_total", "combustible": "combustible_usado",
+                  "restricciones": "restricciones"}
+
+
+def costo_j(metricas: dict, config: dict | None = None, pesos: dict | None = None) -> dict:
+    """J = suma de peso · valor de cada término (especificación §11). Pesos: `pesos`, o los de
+    `config.costo.pesos`, o los por defecto; un término sin dato (por ejemplo, sin combustible) vale 0."""
+    pesos = {**PESOS_COSTO, **(((config or {}).get("costo") or {}).get("pesos") or {}), **(pesos or {})}
+    terminos = {nombre: _numero(pesos[nombre] * (metricas.get(clave) or 0))
+                for nombre, clave in TERMINOS_COSTO.items()}
+    return {"pesos": pesos, "terminos": terminos, "total": _numero(sum(terminos.values()))}
+
+
+def _combustible(linea: LineaDeTiempo, agente: str, recargado: float, recargas: int) -> dict:
+    """Combustible de un agente desde el log (vacío si el trace no lo trae)."""
+    niveles = [c for c in linea.combustible.get(agente, []) if c is not None]
+    if not niveles:
+        return {}
+    inicial, final = niveles[0], niveles[-1]
+    return {"combustible_usado": round(inicial - final + recargado, 2),
+            "combustible_comprado": round(inicial + recargado, 2),
+            "recargas": recargas, "combustible_minimo": min(niveles)}
 
 
 def series_temporales(fuente) -> dict:
@@ -223,12 +320,15 @@ def series_temporales(fuente) -> dict:
     - en_transito: grano que llevan los agentes (suma de las cargas).
     - entregado_en_bodega: grano acumulado en la bodega (cosechado = en tránsito + en bodega).
     - bloqueos_acumulados: eventos BLOQUEO hasta ese tick (total).
-    - por_agente: {id: {"carga": [...]}}; las cosechadoras además llevan "ocioso_acumulado" y "distancia_al_carro".
+    - por_agente: {id: {"carga": [...]}}; las cosechadoras además llevan "ocioso_acumulado" y "distancia_al_carro";
+      si el trace trae combustible, cada agente lleva "combustible" (None antes de conocerlo).
     """
     linea = linea_de_tiempo(fuente)
     cosechadoras = linea.ids(COSECHADORA)
-    grano = linea.mundo.get("grano_por_celda", 1)
     por_agente: dict[str, dict] = {a: {"carga": [c or 0 for c in linea.carga[a]]} for a in linea.ids()}
+    for a in linea.ids():
+        if any(c is not None for c in linea.combustible.get(a, [])):
+            por_agente[a]["combustible"] = list(linea.combustible[a])
     for h in cosechadoras:
         acumulado, n = [], 0
         for e in linea.estado[h]:
@@ -247,7 +347,7 @@ def series_temporales(fuente) -> dict:
                              for t in linea.ticks],
         "distancia_cosechadora_carro": [_promedio([por_agente[h]["distancia_al_carro"][t] for h in cosechadoras])
                                         for t in linea.ticks],
-        "cosechado_acumulado": [c * grano for c in linea.cosechadas],
+        "cosechado_acumulado": list(linea.grano_cosechado),
         "en_transito": [sum(por_agente[a]["carga"][t] for a in linea.ids()) for t in linea.ticks],
         "entregado_en_bodega": list(linea.entregado),
         "bloqueos_acumulados": bloqueos,

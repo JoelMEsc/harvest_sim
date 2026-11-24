@@ -18,6 +18,8 @@ import copy
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
+from .campo import rendimiento
+
 
 @dataclass(frozen=True)
 class LineaDeTiempo:
@@ -35,6 +37,9 @@ class LineaDeTiempo:
     en_transito: list[tuple[int, ...]]                # ids de mensajes enviados y aún no entregados
     eventos: list[list[dict]]                         # los eventos de cada tick (referencias al trace, sin copiar)
     _por_tipo: dict[str, list[str]] = field(default_factory=dict, repr=False)
+    combustible: dict[str, list[float | None]] = field(default_factory=dict)   # 2.2; None si no hay
+    grano_cosechado: list[int] = field(default_factory=list)  # grano cosechado hasta ese tick, inclusive
+    config: dict = field(default_factory=dict)        # la configuración del trace (pesos de J, tanques…)
 
     @property
     def ticks(self) -> range:
@@ -81,10 +86,14 @@ def linea_de_tiempo(fuente) -> LineaDeTiempo:
     for a in catalogo:
         por_tipo.setdefault(a.get("tipo"), []).append(a["id"])
 
-    actual = {a: {"pose": None, "estado": None, "carga": None} for a in ids}
+    actual = {a: {"pose": None, "estado": None, "carga": None, "combustible": None} for a in ids}
     pose = {a: [] for a in ids}
     estado = {a: [] for a in ids}
     carga = {a: [] for a in ids}
+    combustible = {a: [] for a in ids}
+    mundo = trace.get("mundo", {})
+    grano_cosechado: list[int] = []
+    grano_total = 0
     celdas_nuevas, cosechadas, entregado, en_transito, eventos = [], [], [], [], []
     n_celdas = total_entregado = 0
     transito: list[int] = []
@@ -107,8 +116,11 @@ def linea_de_tiempo(fuente) -> LineaDeTiempo:
                     a["estado"] = s["estado"]
                 if "carga" in s:
                     a["carga"] = s["carga"]
+                if "combustible" in s:
+                    a["combustible"] = s["combustible"]
             elif tipo == "CELDA_COSECHADA":
                 nuevas.append((e["celda"][0], e["celda"][1]))
+                grano_total += e.get("cantidad", rendimiento(mundo, (e["celda"][0], e["celda"][1])))
             elif tipo == "DEPOSITO":
                 total_entregado = e["entregado_total"]
             elif tipo == "MENSAJE_ENVIADO":
@@ -120,6 +132,8 @@ def linea_de_tiempo(fuente) -> LineaDeTiempo:
             pose[a].append(actual[a]["pose"])
             estado[a].append(actual[a]["estado"])
             carga[a].append(actual[a]["carga"])
+            combustible[a].append(actual[a]["combustible"])
+        grano_cosechado.append(grano_total)
         n_celdas += len(nuevas)
         celdas_nuevas.append(nuevas)
         cosechadas.append(n_celdas)
@@ -130,7 +144,8 @@ def linea_de_tiempo(fuente) -> LineaDeTiempo:
     return LineaDeTiempo(
         total_ticks=total, mundo=trace.get("mundo", {}), agentes=catalogo, pose=pose, estado=estado,
         carga=carga, celdas_nuevas=celdas_nuevas, cosechadas=cosechadas, entregado=entregado,
-        en_transito=en_transito, eventos=eventos, _por_tipo=por_tipo,
+        en_transito=en_transito, eventos=eventos, _por_tipo=por_tipo, combustible=combustible,
+        grano_cosechado=grano_cosechado, config=trace.get("config") or {},
     )
 
 
