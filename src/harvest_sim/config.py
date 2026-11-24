@@ -1,16 +1,48 @@
-
 """Carga y validación de la configuración de un escenario.
 
-Especificación: sección 3.
+Especificación: sección 3 (primera entrega) y §2 de la segunda entrega. Las secciones nuevas
+(`politica`, `incertidumbre`, `combustible`, `costo`) son opcionales: si faltan, se usan los valores por
+defecto, que reproducen la primera entrega.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
-from .datos.campo import expandir_obstaculos
+from .datos.campo import celdas_de_campo, expandir_obstaculos
+from .datos.metricas import PESOS_COSTO
+
+# Valores por defecto de la especificación de la segunda entrega §2 (= línea base de la primera).
+POLITICA_POR_DEFECTO = {
+    "asignacion": "directa",
+    "umbral_aviso": 1.0,
+    "atender_desde_bodega": False,
+    "encadenar_servicios": False,
+    "espera_propuestas": 2,
+    "reintento_subasta": 3,
+}
+INCERTIDUMBRE_POR_DEFECTO = {
+    # None = {minimo: grano_por_celda, maximo: grano_por_celda}: depende de otro campo
+    "rendimiento": None,
+    "duracion_extra_maxima": 0,
+    "retraso_mensajes": {"probabilidad": 0.0, "maximo": 0},
+}
+COMBUSTIBLE_POR_DEFECTO = {
+    "tanque_cosechadora": 100000,
+    "tanque_carro": 100000,
+    "consumo_por_celda_cosechadora": 2.0,
+    "consumo_por_celda_carro": 1.0,
+    "consumo_por_tick_encendido": 0.5,
+    "reserva": 0.15,
+    "tasa_recarga": 0,
+}
+COSTO_POR_DEFECTO = {"pesos": dict(PESOS_COSTO)}
+
+ASIGNACIONES = ("directa", "subasta")
+SECCIONES_OPCIONALES = ("politica", "incertidumbre", "combustible", "costo")
 
 
 @dataclass(frozen=True)
@@ -30,6 +62,103 @@ class Config:
     obstaculos: dict = field(
         default_factory=lambda: {"celdas": [], "regiones": []}
     )
+    politica: dict = field(default_factory=lambda: copy.deepcopy(POLITICA_POR_DEFECTO))
+    incertidumbre: dict = field(default_factory=dict)  # se completa en __post_init__ (depende de grano)
+    combustible: dict = field(default_factory=lambda: copy.deepcopy(COMBUSTIBLE_POR_DEFECTO))
+    costo: dict = field(default_factory=lambda: copy.deepcopy(COSTO_POR_DEFECTO))
+
+    def __post_init__(self) -> None:
+        # Un Config creado en código (pruebas) también trae todas las claves de cada sección.
+        completas = {
+            "politica": _con_defectos("politica", self.politica, POLITICA_POR_DEFECTO),
+            "incertidumbre": _con_defectos(
+                "incertidumbre", self.incertidumbre, _incertidumbre_por_defecto(self.grano_por_celda)
+            ),
+            "combustible": _con_defectos("combustible", self.combustible, COMBUSTIBLE_POR_DEFECTO),
+            "costo": _con_defectos("costo", self.costo, COSTO_POR_DEFECTO),
+        }
+        for nombre, valor in completas.items():
+            object.__setattr__(self, nombre, valor)
+
+
+# Campos que todo JSON de escenario debe traer (los de la primera entrega; obstaculos tiene defecto).
+OBLIGATORIOS = tuple(
+    f.name for f in fields(Config) if f.name not in SECCIONES_OPCIONALES + ("obstaculos",)
+)
+
+
+def _incertidumbre_por_defecto(grano_por_celda: int) -> dict:
+    defectos = copy.deepcopy(INCERTIDUMBRE_POR_DEFECTO)
+    defectos["rendimiento"] = {"minimo": grano_por_celda, "maximo": grano_por_celda}
+    return defectos
+
+
+def _con_defectos(ruta: str, valor, defectos: dict) -> dict:
+    """Completa las claves que falten con los defectos (también en los dicts anidados) y rechaza las
+    desconocidas. Devuelve un dict nuevo: nunca comparte ni modifica los defectos."""
+    if valor is None:
+        valor = {}
+    if not isinstance(valor, dict):
+        raise ValueError(f"config: {ruta} debe ser un objeto")
+    desconocidas = sorted(set(valor) - set(defectos))
+    if desconocidas:
+        raise ValueError(f"config: {ruta}.{desconocidas[0]} desconocido")
+    resultado = {}
+    for clave, defecto in defectos.items():
+        if isinstance(defecto, dict):
+            resultado[clave] = _con_defectos(f"{ruta}.{clave}", valor.get(clave), defecto)
+        else:
+            resultado[clave] = copy.deepcopy(valor.get(clave, defecto))
+    return resultado
+
+
+def _es_numero(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _es_entero(v) -> bool:
+    return type(v) is int
+
+
+def _validar_secciones(datos: dict) -> None:
+    pol = datos["politica"]
+    if pol["asignacion"] not in ASIGNACIONES:
+        raise ValueError(f"config: politica.asignacion debe ser una de {list(ASIGNACIONES)}")
+    if not _es_numero(pol["umbral_aviso"]) or not 0 < pol["umbral_aviso"] <= 1:
+        raise ValueError("config: politica.umbral_aviso debe estar en (0, 1]")
+    for clave in ("atender_desde_bodega", "encadenar_servicios"):
+        if not isinstance(pol[clave], bool):
+            raise ValueError(f"config: politica.{clave} debe ser true o false")
+    if not _es_entero(pol["espera_propuestas"]) or pol["espera_propuestas"] < 2:
+        raise ValueError("config: politica.espera_propuestas debe ser un entero >= 2")
+    if not _es_entero(pol["reintento_subasta"]) or pol["reintento_subasta"] < 1:
+        raise ValueError("config: politica.reintento_subasta debe ser un entero >= 1")
+
+    inc = datos["incertidumbre"]
+    rend = inc["rendimiento"]
+    if not (_es_entero(rend["minimo"]) and _es_entero(rend["maximo"]) and 1 <= rend["minimo"] <= rend["maximo"]):
+        raise ValueError("config: incertidumbre.rendimiento debe cumplir 1 <= minimo <= maximo (enteros)")
+    if not _es_entero(inc["duracion_extra_maxima"]) or inc["duracion_extra_maxima"] < 0:
+        raise ValueError("config: incertidumbre.duracion_extra_maxima debe ser un entero >= 0")
+    retraso = inc["retraso_mensajes"]
+    if not _es_numero(retraso["probabilidad"]) or not 0 <= retraso["probabilidad"] <= 1:
+        raise ValueError("config: incertidumbre.retraso_mensajes.probabilidad debe estar en [0, 1]")
+    if not _es_entero(retraso["maximo"]) or retraso["maximo"] < 0:
+        raise ValueError("config: incertidumbre.retraso_mensajes.maximo debe ser un entero >= 0")
+
+    comb = datos["combustible"]
+    for clave in ("tanque_cosechadora", "tanque_carro", "consumo_por_celda_cosechadora",
+                  "consumo_por_celda_carro", "consumo_por_tick_encendido"):
+        if not _es_numero(comb[clave]) or comb[clave] <= 0:
+            raise ValueError(f"config: combustible.{clave} debe ser un número > 0")
+    if not _es_numero(comb["reserva"]) or not 0 <= comb["reserva"] < 1:
+        raise ValueError("config: combustible.reserva debe estar en [0, 1)")
+    if not _es_numero(comb["tasa_recarga"]) or comb["tasa_recarga"] < 0:
+        raise ValueError("config: combustible.tasa_recarga debe ser un número >= 0")
+
+    for clave, peso in datos["costo"]["pesos"].items():
+        if not _es_numero(peso) or peso < 0:
+            raise ValueError(f"config: costo.pesos.{clave} debe ser un número >= 0")
 
 
 def cargar_config(ruta: str | Path) -> Config:
@@ -43,10 +172,10 @@ def cargar_config(ruta: str | Path) -> Config:
     if not isinstance(datos, dict):
         raise ValueError("config: se esperaba un objeto JSON")
 
-    # verificar que estén todos los campos esperados
-    campos_esperados = {campo.name for campo in fields(Config)}
-    faltantes = campos_esperados - datos.keys()
-    sobrantes = datos.keys() - campos_esperados
+    # verificar que estén los campos obligatorios y ninguno desconocido
+    conocidos = {campo.name for campo in fields(Config)}
+    faltantes = set(OBLIGATORIOS) - datos.keys()
+    sobrantes = datos.keys() - conocidos
 
     if faltantes:
         raise ValueError(f"config: falta {sorted(faltantes)[0]}")
@@ -79,37 +208,51 @@ def cargar_config(ruta: str | Path) -> Config:
         if type(valor) is not int or valor <= 0:
             raise ValueError(f"config: {campo} debe ser un entero positivo")
 
-    # por ahora solo se permite una cosechadora y un carro
-    if datos["num_carros"] != 1:
-        raise ValueError("config: num_carros distinto de 1 aún no soportado")
-
-    if datos["num_cosechadoras"] != 1:
-        raise ValueError("config: num_cosechadoras distinto de 1 aún no soportado")
-
     if datos["ancho"] < 1 + datos["num_carros"] + datos["num_cosechadoras"]:
         raise ValueError("config: ancho insuficiente para la bodega y las bases")
 
     if datos["alto"] < 2:
         raise ValueError("config: alto debe ser al menos 2")
 
+    # cada cosechadora recorre una franja de al menos una fila del campo (filas 1..alto-1)
+    if datos["alto"] - 1 < datos["num_cosechadoras"]:
+        raise ValueError("config: alto insuficiente: cada cosechadora necesita al menos una fila del campo")
+
     if datos["capacidad_carro"] < datos["capacidad_cosechadora"]:
         raise ValueError(
             "config: capacidad_carro debe ser mayor o igual a capacidad_cosechadora"
         )
 
-    if datos["capacidad_cosechadora"] % datos["grano_por_celda"] != 0:
-        raise ValueError(
-            "config: capacidad_cosechadora debe ser múltiplo de grano_por_celda"
-        )
+    # completar las secciones opcionales con sus defectos y validarlas
+    datos["politica"] = _con_defectos("politica", datos.get("politica"), POLITICA_POR_DEFECTO)
+    datos["incertidumbre"] = _con_defectos(
+        "incertidumbre", datos.get("incertidumbre"), _incertidumbre_por_defecto(datos["grano_por_celda"])
+    )
+    datos["combustible"] = _con_defectos("combustible", datos.get("combustible"), COMBUSTIBLE_POR_DEFECTO)
+    datos["costo"] = _con_defectos("costo", datos.get("costo"), COSTO_POR_DEFECTO)
+    _validar_secciones(datos)
 
-    # validar los obstáculos usando la función compartida del proyecto
+    # Con rendimiento fijo, la tolva se llena exacto si su capacidad es múltiplo del grano de una celda.
+    # Con rendimiento variable no se exige: la cosechadora se considera llena antes (spec §8).
+    rendimiento = datos["incertidumbre"]["rendimiento"]
+    if rendimiento["minimo"] == rendimiento["maximo"]:
+        if datos["capacidad_cosechadora"] % rendimiento["minimo"] != 0:
+            raise ValueError(
+                "config: capacidad_cosechadora debe ser múltiplo de grano_por_celda"
+                " (o del rendimiento fijo de cada celda)"
+            )
+    if datos["capacidad_cosechadora"] < rendimiento["maximo"]:
+        raise ValueError("config: capacidad_cosechadora menor que el rendimiento máximo de una celda")
+
+    # validar los obstáculos usando la función compartida del proyecto (mapa, fila 0, alcanzabilidad)
+    datos.setdefault("obstaculos", {"celdas": [], "regiones": []})
     celdas = expandir_obstaculos(
         datos["obstaculos"],
         datos["ancho"],
         datos["alto"],
     )
-
-    if celdas:
-        raise ValueError("config: obstáculos aún no soportados en esta entrega")
+    libres = celdas_de_campo({"ancho": datos["ancho"], "alto": datos["alto"], "obstaculos": celdas})
+    if not libres:
+        raise ValueError("config: el campo no tiene celdas libres")
 
     return Config(**datos)
