@@ -25,12 +25,20 @@ ORDEN_METRICAS = [
     "distancia_total", "distancia_cosechadora_carro_promedio", "distancia_cosechadora_carro_minima",
     "distancia_cosechadora_carro_maxima", "utilizacion_carro", "ticks_bloqueados", "colisiones",
     "mensajes_enviados", "grano_cosechado_total", "grano_total_entregado", "grano_esperado_total",
-    "porcentaje_entregado", "por_agente",
+    "porcentaje_entregado", "tiempo_ocioso_total", "combustible_usado", "combustible_comprado", "recargas",
+    "combustible_minimo", "restricciones", "restricciones_por_regla", "servicios", "propuestas_por_servicio",
+    "rechazos_por_motivo", "respuesta_promedio", "costo", "costo_total", "por_agente",
 ]
+# Claves de la segunda entrega, que en un trace 2.1 (sin combustible, subasta ni restricciones) quedan vacías.
+NUEVAS_VACIAS = {"combustible_usado": None, "combustible_comprado": None, "recargas": None,
+                 "combustible_minimo": None, "restricciones": 0, "restricciones_por_regla": {}, "servicios": None,
+                 "propuestas_por_servicio": None, "rechazos_por_motivo": {}, "respuesta_promedio": None}
+CLAVES_V0_1 = ORDEN_METRICAS[:ORDEN_METRICAS.index("tiempo_ocioso_total")]
 
 
 def sin_detalle(m):
-    return {k: v for k, v in m.items() if k != "por_agente"}
+    """Solo las métricas de la primera entrega (las demás se prueban aparte)."""
+    return {k: v for k, v in m.items() if k in CLAVES_V0_1}
 
 
 def test_metricas_del_fixture():
@@ -65,6 +73,11 @@ def test_metricas_del_fixture():
                                  "YENDO_A_BODEGA": 8, "DESCARGANDO": 8, "REGRESANDO_A_BASE": 3}},
     }
     assert isinstance(m["tiempo_ocioso_cosechadora"], int)  # un promedio entero se queda entero
+    # Segunda entrega: J = 49 (tiempo) + 32 · 0.5 (distancia) + 23 · 5 (ocio) = 180; lo demás vacío.
+    assert {k: m[k] for k in NUEVAS_VACIAS} == NUEVAS_VACIAS and m["tiempo_ocioso_total"] == 23
+    assert m["costo"]["terminos"] == {"tiempo": 49, "distancia": 16, "colisiones": 0, "ocio": 115,
+                                      "combustible": 0, "restricciones": 0}
+    assert m["costo_total"] == m["costo"]["total"] == 180
     assert trace == original  # no modifica el trace
     assert calcular_metricas(linea_de_tiempo(trace)) == m  # mismo resultado con trace o con línea de tiempo
 
@@ -121,7 +134,8 @@ def test_dos_cosechadoras_y_un_carro():
     m = calcular_metricas(trace_a_mano(DOS_COSECHADORAS, TICKS_2H, EVENTOS_2H))
     assert m["agentes"] == {"cosechadoras": 2, "carros": 1}
     assert (m["tiempo_ocioso_cosechadora"], m["porcentaje_ocioso"], m["tiempo_transfiriendo"]) == (2, 50.0, 0.5)
-    assert (m["espera_promedio_por_ciclo"], m["num_ciclos"], m["ticks_bloqueados"]) == (2, 2, 2)
+    # num_ciclos cuenta transferencias terminadas: en este guion hay avisos LLENA pero ninguna transferencia
+    assert (m["espera_promedio_por_ciclo"], m["num_ciclos"], m["ticks_bloqueados"]) == (2, 0, 2)
     assert (m["distancia_cosechadora"], m["distancia_carro"], m["distancia_total"]) == (0.5, 2, 3)
     assert (m["distancia_cosechadora_carro_promedio"], m["distancia_cosechadora_carro_minima"],
             m["distancia_cosechadora_carro_maxima"]) == (3.125, 1, 5)
@@ -129,7 +143,7 @@ def test_dos_cosechadoras_y_un_carro():
     h1, h2, c1 = (m["por_agente"][a] for a in ("h1", "h2", "c1"))
     assert (h1["tiempo_ocioso"], h1["espera_por_ciclo"], h1["distancia"], h1["distancia_al_carro_promedio"]) == (2, [2], 0, 1.75)
     assert (h2["tiempo_ocioso"], h2["espera_por_ciclo"], h2["distancia"], h2["distancia_al_carro_promedio"]) == (2, [2], 1, 4.5)
-    assert (h1["num_ciclos"], h2["num_ciclos"]) == (1, 1)
+    assert (h1["num_ciclos"], h2["num_ciclos"]) == (0, 0)
     assert (h1["ticks_bloqueados"], h2["ticks_bloqueados"], c1["ticks_bloqueados"]) == (0, 1, 1)
     assert (c1["utilizacion"], c1["distancia"]) == (0.75, 2)
 
@@ -269,3 +283,54 @@ def test_mapa_de_trafico_del_fixture():
     assert mapa[0][0] == 3  # el carro entra 3 veces a la bodega (una por descarga)
     with pytest.raises(ValueError):
         mapa_por_celda(trace, "otro")
+
+
+# --- Segunda entrega: combustible, subasta, restricciones y costo J -----------------------------
+EJEMPLO_22 = FIXTURE.parent / "trace_ejemplo_22.json"
+
+
+def test_costo_j_del_guion_de_20_ticks():
+    """J = 20 (tiempo) + 12 · 0.5 (distancia) + 4 · 5 (ocio) = 46, con los pesos por defecto; con pesos propios
+    en la config del trace se usan esos; un término sin dato vale 0."""
+    trace, _ = construir_trace()
+    assert calcular_metricas(trace)["costo_total"] == 46
+    trace["config"]["costo"] = {"pesos": {"ocio": 0, "tiempo": 2}}
+    assert calcular_metricas(trace)["costo_total"] == 2 * 20 + 6
+
+
+def test_metricas_del_trace_de_ejemplo_2_2():
+    """Valores a mano sobre tools/traces_ejemplo_22.py (24 ticks, 2 cosechadoras y 2 carros)."""
+    m = calcular_metricas(cargar_trace(EJEMPLO_22))
+    assert m["agentes"] == {"cosechadoras": 2, "carros": 2}
+    # grano: 1 + 2 + 1 + 1 + 2 cosechado; 21 esperado (3 filas de 7 con el obstáculo en 0); 7 en la bodega
+    assert (m["grano_cosechado_total"], m["grano_esperado_total"], m["grano_total_entregado"]) == (7, 21, 7)
+    assert m["porcentaje_entregado"] == 33.33
+    # subasta: 2 servicios, 3 propuestas, 1 rechazo por combustible; respuesta (10 − 1 + 15 − 2) / 2 = 11
+    assert (m["servicios"], m["propuestas_por_servicio"], m["respuesta_promedio"]) == (2, 1.5, 11)
+    assert m["rechazos_por_motivo"] == {"combustible": 1}
+    assert m["mensajes_enviados"] == {"SOLICITUD_SERVICIO": 4, "PROPUESTA": 3, "RECHAZO": 1, "ACEPTACION": 2,
+                                      "RECHAZO_PROPUESTA": 1, "TRANSFERENCIA_TERMINADA": 2}
+    assert (m["num_ciclos"], m["tick_fin_cosecha"]) == (2, 17)
+    assert (m["restricciones"], m["restricciones_por_regla"]) == (1, {"combustible_reserva": 1})
+    h1, c1, c2 = (m["por_agente"][a] for a in ("cosechadora_1", "carro_1", "carro_2"))
+    # cosechadora_1: 6 celdas × 2 L + 15 ticks encendida sin moverse × 0.5 L = 19.5; 4 recargas en su base.
+    # El mínimo es el del final de un tick: 32.5 en el tick 20 (en el 21 llega con 30.5 pero se recarga ese tick).
+    assert (h1["combustible_usado"], h1["recargas"], h1["combustible_minimo"], h1["combustible_comprado"]) == \
+        (19.5, 4, 32.5, 69.5)
+    # carro_2: empieza con 8 L en su base y recarga 5 + 5 + 5 + 5 + 2 sin moverse
+    assert (c2["combustible_usado"], c2["recargas"], c2["combustible_minimo"], c2["combustible_comprado"]) == \
+        (0, 5, 8.0, 30.0)
+    assert (c1["servicios_ganados"], c2["servicios_ganados"], c2["restricciones"]) == (2, 0, 1)
+    agentes = m["por_agente"].values()
+    assert m["combustible_usado"] == round(sum(a["combustible_usado"] for a in agentes), 2)
+    assert m["recargas"] == sum(a["recargas"] for a in agentes)
+    assert m["combustible_minimo"] == 8.0
+    assert m["costo"]["terminos"]["combustible"] == round(0.2 * m["combustible_usado"], 4)
+    assert m["costo"]["terminos"]["restricciones"] == 10
+
+
+def test_series_con_combustible():
+    s = series_temporales(cargar_trace(EJEMPLO_22))
+    assert s["por_agente"]["carro_2"]["combustible"][:6] == [8.0, 13.0, 18.0, 23.0, 28.0, 30.0]
+    assert s["cosechado_acumulado"][-1] == 7
+    assert "combustible" not in series_temporales(cargar_trace(FIXTURE))["por_agente"]["cosechadora_1"]

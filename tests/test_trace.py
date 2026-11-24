@@ -1,4 +1,4 @@
-"""Trace 2.1: checksum, TraceBuilder, línea de tiempo, reconstrucción, escritura y fixture.  [Dueño: Joel]
+"""Trace 2.2: checksum, TraceBuilder, línea de tiempo, reconstrucción, escritura y fixture.  [Dueño: Joel]
 
 Los valores esperados están calculados a mano a partir de un guion de 20 ticks (tests/ayuda_datos.py):
 no salen del código que se prueba.
@@ -37,12 +37,12 @@ def test_checksum_es_estable_e_ignora_el_campo_checksum():
     assert con_checksum(registro_)["checksum"] == c
 
 
-def test_estructura_trace_v2_1():
-    """El trace construido tiene schema_version 2.1, meta, config, mundo, agentes, ticks (arreglo
+def test_estructura_trace_v2_2():
+    """El trace construido tiene schema_version 2.2, meta, config, mundo, agentes, ticks (arreglo
     ordenado) y metricas, coherentes con el config, y las clases de la ontología las pone el builder."""
     trace, _ = construir_trace()
     assert list(trace) == ["schema_version", "meta", "config", "mundo", "agentes", "ticks", "metricas"]
-    assert trace["schema_version"] == "2.1" == SCHEMA_VERSION
+    assert trace["schema_version"] == "2.2" == SCHEMA_VERSION
     assert trace["meta"] == {"escenario": "ejemplo_mini", "seed": 0, "total_ticks": TOTAL, "clase": CLASE_REGISTRO}
     assert trace["config"] == CONFIG and trace["mundo"] == {**MUNDO, "clase_celdas": CLASE_CELDAS}
     assert trace["agentes"] == [{"id": a["id"], "tipo": a["tipo"], "clase": CLASE_AGENTE, "capacidad": a["capacidad"],
@@ -196,7 +196,7 @@ def test_escritura_reproducible(tmp_path):
     escribir_trace(trace2, b)
     bytes_a = a.read_bytes()
     assert bytes_a == b.read_bytes()
-    assert bytes_a.startswith(b'{\n  "schema_version": "2.1",')
+    assert bytes_a.startswith(b'{\n  "schema_version": "2.2",')
     assert bytes_a.endswith(b"}\n") and b"\r" not in bytes_a
     # cada tick en una sola línea y las coordenadas del primer nivel en una línea
     texto = bytes_a.decode("utf-8")
@@ -208,9 +208,9 @@ def test_escritura_reproducible(tmp_path):
 
 
 def test_fixture_es_valido_y_verificable():
-    """El fixture existe, es esquema 2.1, pasa los checksums y se puede reconstruir completo."""
+    """El fixture existe, es esquema 2.2, pasa los checksums y se puede reconstruir completo."""
     trace = cargar_trace(FIXTURE)
-    assert trace["schema_version"] == "2.1" and verificar_checksums(trace)
+    assert trace["schema_version"] == "2.2" and verificar_checksums(trace)
     numeros = [t["tick"] for t in trace["ticks"]]
     assert numeros[0] == 0 and numeros == sorted(set(numeros))
     assert [e["tick"] for e in reconstruir(trace)] == list(range(trace["meta"]["total_ticks"] + 1))
@@ -289,3 +289,21 @@ def test_linea_de_tiempo_coincide_con_reconstruir():
     linea = linea_de_tiempo(construir_trace()[0])
     assert linea.celdas_nuevas[14] == [(3, 2)] and linea.cosechadas[13] == 4
     assert linea.celda(C, 17) == (0, 0)
+
+
+def test_builder_sigue_el_combustible_solo_si_viene():
+    """2.2: si el registro trae `combustible`, se registra cuando cambia (2 decimales); si no, el log es el de 2.1."""
+    b = TraceBuilder(CONFIG, MUNDO, AGENTES)
+    base = {"pose": pose(2, 0, "S"), "estado": "EN_BASE", "carga": 0}
+    for t, litros in enumerate([100, 100, 99.4567, 99.4567]):
+        r = registro(t, H, base)
+        r["combustible"] = litros
+        b.agregar_tick(t, [r], [])
+    ticks = {t["tick"]: t["cambios"] for t in b.construir()["ticks"]}
+    assert ticks[0][0]["set"]["combustible"] == 100.0
+    assert 1 not in ticks and 3 not in ticks                      # sin cambios, el tick no aparece
+    assert ticks[2] == [{"tipo": "AGENTE", "id": H, "set": {"combustible": 99.46}}]
+
+    sin = TraceBuilder(CONFIG, MUNDO, AGENTES)
+    sin.agregar_tick(0, [registro(0, H, base)], [])
+    assert "combustible" not in sin.construir()["ticks"][0]["cambios"][0]["set"]

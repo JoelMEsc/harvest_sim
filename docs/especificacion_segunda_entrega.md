@@ -132,7 +132,7 @@ La cosechadora es el **administrador** del servicio y los carros son los **contr
 |---|---|---|---|---|
 | 1. Llamada | `SOLICITUD_SERVICIO` | `cfp` | cosechadora → cada carro | `servicio`, `x`, `y`, `carga`, `capacidad` |
 | 2a. Oferta | `PROPUESTA` | `propose` | carro → cosechadora | `servicio`, `costo` (ticks estimados hasta llegar) |
-| 2b. Rechazo | `RECHAZO` | `refuse` | carro → cosechadora | `servicio`, `motivo` (`"sin_capacidad"`, `"combustible"`) |
+| 2b. Rechazo | `RECHAZO` | `refuse` | carro → cosechadora | `servicio`, `motivo` (`"sin_capacidad"`, `"combustible"`, `"sin_ruta"`) |
 | 3a. Adjudicación | `ACEPTACION` | `accept-proposal` | cosechadora → ganador | `servicio` |
 | 3b. Descarte | `RECHAZO_PROPUESTA` | `reject-proposal` | cosechadora → los demás | `servicio` |
 | 4. Fin | `TRANSFERENCIA_TERMINADA` | `inform` | cosechadora → ganador | `servicio`, `cantidad` |
@@ -194,7 +194,7 @@ Solo agrega campos a la 2.1. El validador acepta 2.1 y 2.2.
 |---|---|
 | `schema_version` | `"2.2"` |
 | `AGENTE.set.combustible` | Nuevo campo permitido (número ≥ 0) |
-| `CELDA_COSECHADA.cantidad` | Grano obtenido en esa celda (entero ≥ 1) |
+| `CELDA_COSECHADA.cantidad` | Grano obtenido en esa celda (entero ≥ 1). Opcional: si falta, vale el rendimiento de `mundo.rendimiento` o `grano_por_celda` |
 | `mundo.rendimiento` | Opcional: matriz alto × ancho con el grano de cada celda (0 en servicio y obstáculos). Si falta, todas valen `grano_por_celda` |
 | `RECARGA` | Evento nuevo: `agente`, `cantidad`, `nivel` (categoría 2) |
 | `RESTRICCION` | Evento nuevo: `agente`, `regla`, `detalle` (categoría 2) |

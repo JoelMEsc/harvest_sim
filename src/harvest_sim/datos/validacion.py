@@ -1,4 +1,4 @@
-"""Validador del trace: el contrato del formato 2.1, ejecutable.  [Joel]
+"""Validador del trace: el contrato de los formatos 2.1 y 2.2, ejecutable.  [Joel]
 
     errores = validar_trace(trace)                       # [] si es válido
     avisos = []; validar_trace(trace, avisos=avisos)     # además, avisos que no invalidan el trace
@@ -9,7 +9,15 @@ from __future__ import annotations
 from .campo import celdas_de_campo
 from .formato import (
     CAMPOS_AGENTE,
+    CAMPOS_AGENTE_OBLIGATORIOS,
     CAMPOS_EVENTO,
+    CAMPOS_EVENTO_OPCIONALES,
+    EVENTOS_DESDE,
+    MOTIVOS_RECHAZO,
+    PAYLOAD_POR_TIPO,
+    REGLAS_RESTRICCION,
+    RECHAZO,
+    VERSIONES_ACEPTADAS,
     CATEGORIA,
     CLASE_AGENTE,
     CLASE_CELDAS,
@@ -33,12 +41,34 @@ def _es_celda(v) -> bool:
     return isinstance(v, list) and len(v) == 2 and all(_es_entero(c) for c in v)
 
 
+def _es_numero(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _tiene_tipo(valor, tipo) -> bool:
-    return _es_entero(valor) if tipo is int else isinstance(valor, tipo)
+    if tipo is int:
+        return _es_entero(valor)
+    if tipo is float:
+        return _es_numero(valor)
+    return isinstance(valor, tipo)
 
 
-def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = None) -> list[str]:
-    """Revisa que un trace cumpla el formato 2.1 (el contrato del log) y que sus datos sean consistentes.
+def _version(texto) -> tuple[int, ...]:
+    try:
+        return tuple(int(p) for p in str(texto).split("."))
+    except ValueError:
+        return (0,)
+
+
+def _retraso_de_config(trace: dict) -> int:
+    """1 + el retraso máximo de mensajes de la configuración del trace (1 si no hay incertidumbre)."""
+    config = trace.get("config") if isinstance(trace.get("config"), dict) else {}
+    retraso = ((config.get("incertidumbre") or {}).get("retraso_mensajes") or {}).get("maximo", 0)
+    return 1 + retraso if _es_entero(retraso) and retraso >= 0 else 1
+
+
+def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | None = None) -> list[str]:
+    """Revisa que un trace cumpla el formato (2.1 o 2.2, el contrato del log) y que sus datos sean consistentes.
 
     Devuelve la lista de errores (vacía si el trace es válido); no se detiene en el primero. Cada mensaje
     dice dónde está el problema, por ejemplo: "tick 14, evento 2 (DEPOSITO): entregado_total 7, se esperaba 6".
@@ -49,11 +79,14 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
     extra, tipos de dato, orden por categoría); agentes (solo pose, estado y carga; en el catálogo;
     completos en el tick 0; orientación válida; carga entre 0 y la capacidad; dentro del mapa); mundo
     (celdas cosechadas dentro del campo, fuera de obstáculos y una sola vez; entregado_total acumulado); y
-    mensajes (ids crecientes, performativa válida, entrega entre 1 y `retraso_maximo` ticks después del
-    envío y una sola vez).
+    mensajes (ids crecientes, performativa válida, claves del payload, entrega entre 1 y `retraso_maximo`
+    ticks después del envío y una sola vez). En 2.2, además: combustible entre 0 y el tanque, recargas,
+    restricciones, cantidad de cada celda cosechada y `mundo.rendimiento`.
+
+    `retraso_maximo` por defecto: 1 + `config.incertidumbre.retraso_mensajes.maximo` del trace (1 si no hay).
 
     Si se pasa una lista en `avisos`, agrega ahí lo que no invalida el trace pero conviene revisar
-    (por ejemplo, un estado que no está en formato.ESTADOS_CONOCIDOS).
+    (por ejemplo, un estado, una regla de restricción o un motivo de rechazo que no están en `formato`).
 
     No revisa las reglas físicas de la simulación (un paso por tick, celdas compartidas, intercambios,
     conservación del grano): esas las prueban las pruebas de integración (Ilan, con `reconstruir`) y las del
@@ -75,8 +108,19 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
         error(f"claves no esperadas en el primer nivel: {sobran}")
     if not faltan and not sobran and claves != CLAVES_TRACE:
         error(f"orden de las claves del primer nivel: {claves}; se esperaba {CLAVES_TRACE}")
-    if trace.get("schema_version") != SCHEMA_VERSION:
-        error(f"schema_version es {trace.get('schema_version')!r}; se esperaba {SCHEMA_VERSION!r}")
+    version = trace.get("schema_version")
+    if version not in VERSIONES_ACEPTADAS:
+        error(f"schema_version es {version!r}; se esperaba una de {list(VERSIONES_ACEPTADAS)} (actual: {SCHEMA_VERSION!r})")
+    v = _version(version if version in VERSIONES_ACEPTADAS else SCHEMA_VERSION)
+    if retraso_maximo is None:
+        retraso_maximo = _retraso_de_config(trace)
+    config = trace.get("config") if isinstance(trace.get("config"), dict) else {}
+    tanques = {}
+    if isinstance(config.get("combustible"), dict):
+        for tipo_agente in ("cosechadora", "carro"):
+            t = config["combustible"].get(f"tanque_{tipo_agente}")
+            if _es_numero(t):
+                tanques[tipo_agente] = t
 
     meta = trace.get("meta")
     total = None
@@ -143,6 +187,21 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
         return ancho is None or alto is None or (0 <= x < ancho and 0 <= y < alto)
 
     campo = celdas_de_campo(mundo) if ancho is not None and alto is not None else None
+    rendimiento = None
+    if "rendimiento" in mundo:
+        r = mundo["rendimiento"]
+        filas_ok = (isinstance(r, list) and alto is not None and len(r) == alto
+                    and all(isinstance(f, list) and len(f) == ancho for f in r))
+        if not filas_ok or not all(_es_entero(c) and c >= 0 for f in r for c in f):
+            error(f"mundo: rendimiento debe ser una matriz de {alto} × {ancho} enteros >= 0")
+        else:
+            rendimiento = r
+            for y, fila in enumerate(r):
+                for x, valor in enumerate(fila):
+                    if campo is not None and (x, y) in campo and valor < 1:
+                        error(f"mundo: rendimiento de la celda de campo ({x}, {y}) debe ser >= 1, es {valor}")
+                    elif campo is not None and (x, y) not in campo and valor != 0:
+                        error(f"mundo: rendimiento de ({x}, {y}) debe ser 0 (no es campo), es {valor}")
     con_obstaculo = {tuple(c) for c in mundo.get("obstaculos", [])}
 
     catalogo: dict[str, dict] = {}
@@ -232,11 +291,15 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
                 error(f"{pref}: el evento debe ser un objeto")
                 continue
             tipo = e.get("tipo")
-            if tipo not in CAMPOS_EVENTO:
-                error(f"{pref}: tipo desconocido {tipo!r}")
+            if tipo not in CAMPOS_EVENTO or v < _version(EVENTOS_DESDE.get(tipo, "0")):
+                error(f"{pref}: tipo desconocido {tipo!r}" + (f" (existe desde la versión {EVENTOS_DESDE[tipo]})"
+                                                             if tipo in EVENTOS_DESDE else ""))
                 continue
             pref = f"{pref} ({tipo})"
-            campos = CAMPOS_EVENTO[tipo]
+            campos = dict(CAMPOS_EVENTO[tipo])
+            for campo_opcional, tipo_campo in CAMPOS_EVENTO_OPCIONALES.get(tipo, {}).items():
+                if campo_opcional in e:
+                    campos[campo_opcional] = tipo_campo
             faltantes = [c for c in campos if c not in e]
             if faltantes:
                 error(f"{pref}: faltan campos {faltantes}")
@@ -261,9 +324,14 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
                 agentes_en_tick.add(ident)
                 if not nuevos:
                     error(f"{pref}: set vacío")
-                no_permitidos = sorted(set(nuevos) - set(CAMPOS_AGENTE))
+                permitidos = CAMPOS_AGENTE if v >= (2, 2) else CAMPOS_AGENTE_OBLIGATORIOS
+                no_permitidos = sorted(set(nuevos) - set(permitidos))
                 if no_permitidos:
-                    error(f"{pref}: campos no permitidos en set {no_permitidos} (solo pose, estado y carga)")
+                    error(f"{pref}: campos no permitidos en set {no_permitidos} (solo {', '.join(permitidos)})")
+                if "combustible" in nuevos and "combustible" in permitidos:
+                    nivel, tanque = nuevos["combustible"], tanques.get(catalogo[ident].get("tipo"))
+                    if not _es_numero(nivel) or nivel < 0 or (tanque is not None and nivel > tanque + 1e-9):
+                        error(f"{pref}: combustible {nivel!r} debe ser un número entre 0 y el tanque ({tanque})")
                 if "pose" in nuevos:
                     p = nuevos["pose"]
                     if not (isinstance(p, dict) and set(p) == {"x", "y", "orientacion"}
@@ -303,6 +371,11 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
                 if (x, y) in celdas:
                     error(f"{pref}: la celda ({x}, {y}) se cosecha dos veces")
                 celdas.add((x, y))
+                if "cantidad" in e:
+                    if e["cantidad"] < 1:
+                        error(f"{pref}: cantidad {e['cantidad']} debe ser >= 1")
+                    elif rendimiento is not None and dentro_del_mapa(x, y) and e["cantidad"] != rendimiento[y][x]:
+                        error(f"{pref}: cantidad {e['cantidad']}, el rendimiento de ({x}, {y}) es {rendimiento[y][x]}")
 
             elif tipo == "DEPOSITO":
                 agente_conocido(pref, e["agente"])
@@ -316,6 +389,18 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
             elif tipo == "BLOQUEO":
                 agente_conocido(pref, e["agente"])
 
+            elif tipo == "RECARGA":
+                if agente_conocido(pref, e["agente"]):
+                    tanque = tanques.get(catalogo[e["agente"]].get("tipo"))
+                    if e["cantidad"] < 0 or e["nivel"] < 0 or (tanque is not None and e["nivel"] > tanque + 1e-9):
+                        error(f"{pref}: cantidad {e['cantidad']} y nivel {e['nivel']} deben ser >= 0 y el nivel "
+                              f"no mayor que el tanque ({tanque})")
+
+            elif tipo == "RESTRICCION":
+                agente_conocido(pref, e["agente"])
+                if e["regla"] not in REGLAS_RESTRICCION:
+                    aviso(f"{pref}: regla {e['regla']!r} no está en formato.REGLAS_RESTRICCION")
+
             elif tipo == "MENSAJE_ENVIADO":
                 agente_conocido(pref, e["de"], "de")
                 agente_conocido(pref, e["a"], "a")
@@ -328,6 +413,14 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
                     error(f"{pref}: performativa {e['performativa']!r} no es una de {list(PERFORMATIVAS_VALIDAS)}")
                 elif esperada is not None and e["performativa"] != esperada:
                     error(f"{pref}: performativa {e['performativa']!r} para {e['tipo_mensaje']}; se esperaba {esperada!r}")
+                faltan_payload = [c for c in PAYLOAD_POR_TIPO.get(e["tipo_mensaje"], ()) if c not in e["payload"]]
+                if faltan_payload:
+                    error(f"{pref}: al payload de {e['tipo_mensaje']} le faltan {faltan_payload}")
+                if e["tipo_mensaje"] not in PAYLOAD_POR_TIPO:
+                    aviso(f"{pref}: tipo_mensaje {e['tipo_mensaje']!r} no está en formato.TIPOS_MENSAJE")
+                if e["tipo_mensaje"] == RECHAZO and e["payload"].get("motivo") not in MOTIVOS_RECHAZO \
+                        and "motivo" in e["payload"]:
+                    aviso(f"{pref}: motivo {e['payload']['motivo']!r} no está en formato.MOTIVOS_RECHAZO")
                 if not tick + 1 <= e["entrega_en"] <= tick + retraso_maximo:
                     rango = f"{tick + 1} (el tick siguiente)" if retraso_maximo == 1 else \
                         f"entre {tick + 1} y {tick + retraso_maximo}"
@@ -350,7 +443,7 @@ def validar_trace(trace, retraso_maximo: int = 1, avisos: list[str] | None = Non
 
         if tick == 0:
             for a, campos_a in estado.items():
-                ausentes = [c for c in CAMPOS_AGENTE if c not in campos_a]
+                ausentes = [c for c in CAMPOS_AGENTE_OBLIGATORIOS if c not in campos_a]
                 if ausentes:
                     error(f"tick 0: al agente {a!r} le faltan {ausentes} (el tick 0 es el estado inicial completo)")
 

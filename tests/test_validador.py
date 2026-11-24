@@ -76,7 +76,7 @@ def test_orden_de_las_claves_del_primer_nivel(base):
 def test_version_del_esquema(base):
     def alterar(t):
         t["schema_version"] = "2.0"
-    assert contiene(errores_de(base, alterar), "schema_version", "'2.0'", "'2.1'")
+    assert contiene(errores_de(base, alterar), "schema_version", "'2.0'", "'2.1'", "'2.2'")
 
 
 def test_falta_un_dato_del_mundo(base):
@@ -351,3 +351,111 @@ def test_cli_ok_y_errores(tmp_path, capsys, base):
     salida = capsys.readouterr().out
     assert "roto.json: 1 error(es)" in salida and "schema_version" in salida
     assert "ilegible.json: no se pudo leer" in salida
+
+
+# --- Formato 2.2 ---------------------------------------------------------------------------------
+def test_un_trace_2_1_sigue_siendo_valido(base):
+    def alterar(t):
+        t["schema_version"] = "2.1"
+        for x in t["ticks"]:
+            for e in x["cambios"]:
+                e.pop("cantidad", None) if e["tipo"] == "CELDA_COSECHADA" else None
+    assert errores_de(base, alterar) == []
+
+
+def test_eventos_nuevos_solo_desde_2_2(base):
+    recarga = {"tipo": "RECARGA", "agente": C, "cantidad": 10.5, "nivel": 100}
+
+    def con_recarga(version):
+        def alterar(t):
+            t["schema_version"] = version
+            tick(t, 4)["cambios"].append(copy.deepcopy(recarga))
+        return alterar
+    assert errores_de(base, con_recarga("2.2")) == []
+    assert contiene(errores_de(base, con_recarga("2.1")), "tipo desconocido 'RECARGA'", "desde la versión 2.2")
+
+
+def test_payload_con_claves_obligatorias(base):
+    def alterar(t):
+        _, e = evento(t, "MENSAJE_ENVIADO", lambda e: e["tipo_mensaje"] == "LLENA")
+        del e["payload"]["carga"]
+    assert contiene(errores_de(base, alterar), "(MENSAJE_ENVIADO)", "al payload de LLENA le faltan ['carga']")
+
+
+def test_motivo_y_regla_desconocidos_son_aviso(base):
+    """Un motivo de rechazo o una regla de restricción que no están en formato no invalidan el trace."""
+    trace = copy.deepcopy(base)
+    _, e = evento(trace, "MENSAJE_ENVIADO", lambda e: e["tipo_mensaje"] == "LLENA")
+    e.update(tipo_mensaje="RECHAZO", performativa="refuse", payload={"servicio": "cosechadora_1#1", "motivo": "otro"})
+    tick(trace, 4)["cambios"].append({"tipo": "RESTRICCION", "agente": H, "regla": "regla_nueva", "detalle": "x"})
+    tick(trace, 5)["cambios"].append({"tipo": "RESTRICCION", "agente": H, "regla": "R10_obstaculo", "detalle": "x"})
+    avisos = []
+    assert validar_trace(resellar(trace), avisos=avisos) == []
+    assert any("'otro'" in a for a in avisos) and any("'regla_nueva'" in a for a in avisos)
+    assert not any("R10_obstaculo" in a for a in avisos)
+
+
+@pytest.mark.parametrize("nivel, valido", [(40, True), (50, True), (60, False), (-1, False), ("lleno", False)])
+def test_combustible_entre_cero_y_el_tanque(base, nivel, valido):
+    def alterar(t):
+        t["config"]["combustible"] = {"tanque_cosechadora": 50, "tanque_carro": 30}
+        tick(t, 0)["cambios"][0]["set"]["combustible"] = nivel
+    errores = errores_de(base, alterar)
+    assert (errores == []) == valido, errores
+    if not valido:
+        assert contiene(errores, "tick 0", "combustible")
+
+
+def test_combustible_no_se_permite_en_2_1(base):
+    def alterar(t):
+        t["schema_version"] = "2.1"
+        tick(t, 0)["cambios"][0]["set"]["combustible"] = 10
+    assert contiene(errores_de(base, alterar), "campos no permitidos en set ['combustible']")
+
+
+def test_rendimiento_del_mundo(base):
+    """Mapa 4 × 3 del fixture: fila 0 en 0 y el campo en 1. Se rechazan dimensiones malas, un valor > 0
+    fuera del campo y una cantidad cosechada distinta al rendimiento de su celda."""
+    matriz = [[0, 0, 0, 0], [1, 1, 1, 1], [1, 1, 1, 1]]
+
+    def con(m, cambiar_cantidad=False):
+        def alterar(t):
+            t["mundo"]["rendimiento"] = m
+            if cambiar_cantidad:
+                evento(t, "CELDA_COSECHADA")[1]["cantidad"] = 2
+        return alterar
+    assert errores_de(base, con(matriz)) == []
+    assert contiene(errores_de(base, con(matriz[:2])), "mundo: rendimiento debe ser una matriz de 3 × 4")
+    assert contiene(errores_de(base, con([[1, 0, 0, 0]] + matriz[1:])), "rendimiento de (0, 0) debe ser 0")
+    assert contiene(errores_de(base, con(matriz, cambiar_cantidad=True)), "(CELDA_COSECHADA)", "cantidad 2", "es 1")
+
+
+def test_retraso_maximo_por_defecto_sale_de_la_config(base):
+    """Con incertidumbre.retraso_mensajes.maximo = 2 en la config del trace, entregar 2 ticks tarde es válido
+    sin pasar retraso_maximo; sin esa config, no."""
+    trace = copy.deepcopy(base)
+    _, e = evento(trace, "MENSAJE_ENVIADO")
+    e["entrega_en"] += 1
+    tick_entrega = next(x for x in trace["ticks"] if any(c["tipo"] == "MENSAJE_ENTREGADO" and c["id"] == e["id"]
+                                                         for c in x["cambios"]))
+    entrega = next(c for c in tick_entrega["cambios"] if c["tipo"] == "MENSAJE_ENTREGADO" and c["id"] == e["id"])
+    tick_entrega["cambios"].remove(entrega)
+    next(x for x in trace["ticks"] if x["tick"] == e["entrega_en"])["cambios"].insert(0, entrega)
+    resellar(trace)
+    assert contiene(validar_trace(trace), "entrega_en")
+    trace["config"]["incertidumbre"] = {"retraso_mensajes": {"probabilidad": 0.5, "maximo": 2}}
+    assert validar_trace(trace) == []
+
+
+def test_trace_de_ejemplo_2_2_es_valido_y_se_regenera_identico(tmp_path):
+    """El guion de tools/traces_ejemplo_22.py valida (con su retraso de mensajes) y es determinista."""
+    from harvest_sim.datos import escribir_trace
+    fixture = FIXTURE.parent / "trace_ejemplo_22.json"
+    trace = cargar_trace(fixture)
+    avisos = []
+    assert trace["schema_version"] == "2.2" and validar_trace(trace, avisos=avisos) == [] and avisos == []
+    tipos = {e["tipo"] for t in trace["ticks"] for e in t["cambios"]}
+    assert {"RECARGA", "RESTRICCION", "DEPOSITO"} <= tipos
+    destino = tmp_path / "otra_vez.json"
+    escribir_trace(cargar_script("tools/traces_ejemplo_22.py").generar(), destino)
+    assert destino.read_bytes() == fixture.read_bytes()

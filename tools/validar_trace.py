@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Valida uno o más trace.json contra el formato 2.1 (tarea 6 de Datos).
+"""Valida uno o más trace.json contra el formato 2.1 o 2.2 (tarea 6 de Datos).
 
 Imprime OK o la lista de errores de cada archivo (con el tick, el evento y el campo) y sale con código 1
 si alguno tiene errores, para que sirva en la terminal y en CI.
@@ -23,11 +23,12 @@ from harvest_sim.datos import cargar_trace, validar_trace  # noqa: E402
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Valida trace.json contra el formato 2.1.")
+    parser = argparse.ArgumentParser(description="Valida trace.json contra el formato 2.1 o 2.2.")
     parser.add_argument("trace", nargs="+", help="uno o más trace.json")
     parser.add_argument("--max", type=int, default=50, help="máximo de errores a mostrar por archivo (default: 50)")
-    parser.add_argument("--retraso-maximo", type=int, default=1,
-                        help="ticks máximos entre el envío y la entrega de un mensaje (default: 1)")
+    parser.add_argument("--retraso-maximo", type=int, default=None,
+                        help="ticks máximos entre el envío y la entrega de un mensaje "
+                             "(default: 1 + el retraso máximo de la configuración del trace)")
     args = parser.parse_args(argv)
 
     hubo_errores = False

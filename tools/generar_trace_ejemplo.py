@@ -177,7 +177,8 @@ def simular(cfg, forzar_bloqueo=True):
             h = ag[H]
             S["cosechado"] += cfg["grano_por_celda"]
             h["carga"] += cfg["grano_por_celda"]
-            eventos.append({"tipo": "CELDA_COSECHADA", "celda": list(h["pos"]), "agente": H})
+            eventos.append({"tipo": "CELDA_COSECHADA", "celda": list(h["pos"]), "agente": H,
+                            "cantidad": cfg["grano_por_celda"]})
             if h["carga"] == cap[H] or h["idx"] == len(camino) - 1:
                 enviar("LLENA", H, C, {"x": h["pos"][0], "y": h["pos"][1], "carga": h["carga"]})
                 h["estado"] = "LLENA_ESPERANDO"
@@ -338,7 +339,7 @@ def generar_escenarios(salida=SALIDA_ESCENARIOS):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Genera datos de ejemplo del trace 2.1 (no es la simulación real).")
+    parser = argparse.ArgumentParser(description="Genera datos de ejemplo del trace 2.2 (no es la simulación real).")
     parser.add_argument("--escenarios", action="store_true",
                         help="genera los tres escenarios de ejemplo en lugar del fixture de las pruebas")
     parser.add_argument("--salida", default=str(SALIDA_ESCENARIOS),
