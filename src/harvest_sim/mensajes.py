@@ -19,8 +19,14 @@ logger = logging.getLogger("harvest_sim.mensajes")
 
 
 class TipoMensaje(str, Enum):
-    LLENA = "LLENA"                                    # payload: x, y, carga
-    TRANSFERENCIA_TERMINADA = "TRANSFERENCIA_TERMINADA"  # payload: cantidad
+    LLENA = "LLENA"                                    # request; payload: x, y, carga
+    TRANSFERENCIA_TERMINADA = "TRANSFERENCIA_TERMINADA"  # inform; payload: cantidad (y servicio en subasta)
+    # Contract Net (segunda entrega §7): la cosechadora administra, los carros ofertan
+    SOLICITUD_SERVICIO = "SOLICITUD_SERVICIO"          # cfp; payload: servicio, x, y, carga, capacidad
+    PROPUESTA = "PROPUESTA"                            # propose; payload: servicio, costo
+    RECHAZO = "RECHAZO"                                # refuse; payload: servicio, motivo
+    ACEPTACION = "ACEPTACION"                          # accept-proposal; payload: servicio
+    RECHAZO_PROPUESTA = "RECHAZO_PROPUESTA"            # reject-proposal; payload: servicio
 
 
 @dataclass
@@ -31,12 +37,18 @@ class Mensaje:
     tick_envio: int
     payload: dict = field(default_factory=dict)
     id: int = 0  # lo asigna el Buzon al enviar (1, 2, 3, ...)
+    entrega_en: int = 0  # tick en que se entrega; lo asigna el Buzon al enviar
 
 
 class Buzon:
-    """Fila FIFO de entrada por agente. Un mensaje enviado en el tick t se lee desde t+1."""
+    """Fila FIFO de entrada por agente. Un mensaje enviado en el tick t se lee desde t+1, o más tarde
+    si le toca retraso (segunda entrega §8): con probabilidad `probabilidad` llega U{1..maximo}
+    ticks después. Con probabilidad 0 (o sin generador) nunca se llama al azar: es la línea base."""
 
-    def __init__(self) -> None:
+    def __init__(self, azar=None, probabilidad: float = 0.0, maximo: int = 0) -> None:
+        self._azar = azar
+        self._probabilidad = probabilidad
+        self._maximo = maximo
         self._siguiente_id = 1
         self._en_transito: list[Mensaje] = []
         self._entradas: dict[str, deque[Mensaje]] = {}
@@ -54,6 +66,12 @@ class Buzon:
         self._en_transito.append(pendiente)
 
         entrega_en = pendiente.tick_envio + 1
+        # maximo >= 1 evita randint(1, 0) si alguien pide retraso sin máximo
+        if self._azar is not None and self._probabilidad > 0 and self._maximo >= 1:
+            if self._azar.random() < self._probabilidad:
+                entrega_en += self._azar.randint(1, self._maximo)
+        pendiente.entrega_en = entrega_en
+        mensaje.entrega_en = entrega_en
 
         self._eventos.append({
             "tipo": "MENSAJE_ENVIADO",
@@ -86,12 +104,13 @@ class Buzon:
         return pendiente.id
 
     def entregar(self, tick: int) -> None:
-        """Inicio de cada tick: pasa a los buzones de entrada los mensajes enviados en tick-1.
+        """Inicio de cada tick: pasa a los buzones de entrada los mensajes con entrega_en == tick.
         Imprime cada entrega: t=015 | MSG #1 entregado a carro_1"""
         pendientes = []
 
-        for mensaje in self._en_transito:
-            if mensaje.tick_envio + 1 == tick:
+        # en el orden de su id (con retraso, uno enviado antes puede llegar después)
+        for mensaje in sorted(self._en_transito, key=lambda m: m.id):
+            if mensaje.entrega_en == tick:
                 fila = self._entradas.setdefault(
                     mensaje.receptor, deque()
                 )

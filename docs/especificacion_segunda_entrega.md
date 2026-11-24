@@ -69,7 +69,7 @@ Todas las secciones nuevas son **opcionales**: si faltan, se usan los valores po
 | `politica.umbral_aviso` | 0 < u ≤ 1 | 1.0 | Fracción de la capacidad a la que la cosechadora pide el carro |
 | `politica.atender_desde_bodega` | bool | false | true: el carro atiende su siguiente servicio sin regresar a la base |
 | `politica.encadenar_servicios` | bool | false | true: si le cabe, el carro atiende otro servicio antes de ir a la bodega |
-| `politica.espera_propuestas` | entero ≥ 2 | 2 | Ticks que la cosechadora espera propuestas (más el retraso máximo de mensajes) |
+| `politica.espera_propuestas` | entero ≥ 2 | 2 | Ticks que la cosechadora espera propuestas (más 2 × el retraso máximo de mensajes: ida y vuelta) |
 | `politica.reintento_subasta` | entero ≥ 1 | 3 | Ticks antes de repetir una subasta sin propuestas |
 | `incertidumbre.rendimiento` | 1 ≤ mínimo ≤ máximo | 1, 1 (= `grano_por_celda`) | Grano por celda, sorteado al crear el mundo |
 | `incertidumbre.duracion_extra_maxima` | entero ≥ 0 | 0 | Ticks extra sorteados en cada transferencia y descarga |
@@ -139,7 +139,7 @@ La cosechadora es el **administrador** del servicio y los carros son los **contr
 
 - **Costo de la oferta:** ticks estimados para que el carro llegue junto a la cosechadora = duración restante de su fila de servicios (traslados, transferencias y descargas, con las tasas) + distancia BFS desde donde quedará al terminar esa fila (la bodega si `atender_desde_bodega`, si no su base) hasta la cosechadora. Función `rutas.estimar_costo` (Oswaldo).
 - **Rechazo:** si el carro no tendría combustible para ir, transferir, descargar y volver respetando la reserva, o si nunca le cabría la carga.
-- **Decisión:** la cosechadora espera `espera_propuestas + retraso máximo de mensajes` ticks desde la llamada, elige el **menor costo** (empate: menor id) y avisa a todos. Si no hubo propuestas, repite la llamada después de `reintento_subasta` ticks.
+- **Decisión:** la cosechadora espera `espera_propuestas + 2 × retraso máximo de mensajes` ticks desde la llamada (se pueden retrasar la llamada y la respuesta), elige el **menor costo** (empate: menor id) y avisa a todos. Si no hubo propuestas, repite la llamada después de `reintento_subasta` ticks.
 - **Lectura del buzón:** en modo subasta los carros leen su buzón **en cada tick**, en cualquier estado (en la línea base solo en `EN_BASE`).
 - **Modo `directa` (línea base):** se conserva `LLENA` (`request`) al carro asignado, como en la primera entrega.
 

@@ -48,8 +48,8 @@
     }
   },
   "combustible": {
-    "tanque_cosechadora": 60,
-    "tanque_carro": 40,
+    "tanque_cosechadora": 100,
+    "tanque_carro": 60,
     "tasa_recarga": 10
   }
 }
