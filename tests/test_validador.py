@@ -445,3 +445,17 @@ def test_retraso_maximo_por_defecto_sale_de_la_config(base):
     assert contiene(validar_trace(trace), "entrega_en")
     trace["config"]["incertidumbre"] = {"retraso_mensajes": {"probabilidad": 0.5, "maximo": 2}}
     assert validar_trace(trace) == []
+
+
+def test_trace_de_ejemplo_2_2_es_valido_y_se_regenera_identico(tmp_path):
+    """El guion de tools/traces_ejemplo_22.py valida (con su retraso de mensajes) y es determinista."""
+    from harvest_sim.datos import escribir_trace
+    fixture = FIXTURE.parent / "trace_ejemplo_22.json"
+    trace = cargar_trace(fixture)
+    avisos = []
+    assert trace["schema_version"] == "2.2" and validar_trace(trace, avisos=avisos) == [] and avisos == []
+    tipos = {e["tipo"] for t in trace["ticks"] for e in t["cambios"]}
+    assert {"RECARGA", "RESTRICCION", "DEPOSITO"} <= tipos
+    destino = tmp_path / "otra_vez.json"
+    escribir_trace(cargar_script("tools/traces_ejemplo_22.py").generar(), destino)
+    assert destino.read_bytes() == fixture.read_bytes()
