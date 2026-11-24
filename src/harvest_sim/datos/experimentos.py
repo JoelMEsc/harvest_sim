@@ -30,6 +30,31 @@ _T_95 = [12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 
          2.131, 2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048,
          2.045, 2.042]
 
+# Estrategias de coordinación que se comparan (especificación de la segunda entrega §2). Cada una
+# cambia solo la sección `politica` de la configuración; `base` es la línea base (= v0.1).
+ESTRATEGIAS = {
+    "base": {"politica": {"asignacion": "directa", "umbral_aviso": 1.0,
+                          "atender_desde_bodega": False, "encadenar_servicios": False}},
+    "subasta": {"politica": {"asignacion": "subasta", "umbral_aviso": 1.0,
+                             "atender_desde_bodega": False, "encadenar_servicios": False}},
+    "anticipada": {"politica": {"asignacion": "subasta", "umbral_aviso": 0.7,
+                                "atender_desde_bodega": False, "encadenar_servicios": False}},
+    "anticipada_plus": {"politica": {"asignacion": "subasta", "umbral_aviso": 0.7,
+                                     "atender_desde_bodega": True, "encadenar_servicios": True}},
+}
+
+
+def aplicar_estrategia(config: dict, estrategia: str) -> dict:
+    """Copia de `config` con la estrategia aplicada: mezcla cada sección de la estrategia sobre la de la
+    configuración (las claves que la estrategia no menciona se conservan). Error claro si no existe."""
+    if estrategia not in ESTRATEGIAS:
+        raise ValueError(f"estrategia {estrategia!r} no es una de {list(ESTRATEGIAS)}")
+    nueva = dict(config)
+    for seccion, cambios in ESTRATEGIAS[estrategia].items():
+        nueva[seccion] = {**(config.get(seccion) or {}), **cambios}
+    return nueva
+
+
 # Métricas que se resumen por defecto (escalares del nivel superior).
 METRICAS_RESUMEN = [
     "tiempo_completacion", "tiempo_ocioso_cosechadora", "porcentaje_ocioso", "espera_promedio_por_ciclo",

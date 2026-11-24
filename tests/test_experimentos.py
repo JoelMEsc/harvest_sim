@@ -77,3 +77,19 @@ def test_cli_con_un_experimento_invalido(tmp_path, capsys):
     malo.write_text('{"escenarios": []}', encoding="utf-8")
     assert cli.main([str(malo), "--simulador", "ejemplo"]) == 2
     assert "nombre" in capsys.readouterr().err
+
+
+def test_estrategias_de_la_segunda_entrega():
+    """Las 4 estrategias solo cambian la política; `base` es la línea base (directa, umbral 1)."""
+    from harvest_sim.datos.experimentos import ESTRATEGIAS, aplicar_estrategia
+    assert list(ESTRATEGIAS) == ["base", "subasta", "anticipada", "anticipada_plus"]
+    assert ESTRATEGIAS["base"]["politica"]["asignacion"] == "directa"
+    assert ESTRATEGIAS["anticipada"]["politica"]["umbral_aviso"] == 0.7
+    config = {"nombre": "x", "politica": {"espera_propuestas": 4, "umbral_aviso": 1.0}}
+    nueva = aplicar_estrategia(config, "anticipada_plus")
+    assert nueva["politica"] == {"espera_propuestas": 4, "umbral_aviso": 0.7, "asignacion": "subasta",
+                                 "atender_desde_bodega": True, "encadenar_servicios": True}
+    assert config["politica"]["umbral_aviso"] == 1.0          # no modifica la original
+    assert aplicar_estrategia({"nombre": "y"}, "base")["politica"]["asignacion"] == "directa"
+    with pytest.raises(ValueError, match="no es una de"):
+        aplicar_estrategia(config, "otra")
