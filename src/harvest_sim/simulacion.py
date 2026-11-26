@@ -67,6 +67,8 @@ def ejecutar(config: Config, despachador=None) -> dict:
         config_trace["mapa"] = {"archivo": config.mapa["archivo"], "sha256": config.mapa["sha256"]}
     else:
         config_trace.pop("mapa", None)
+    if config.politica.get("movimiento", "celdas") == "celdas":
+        config_trace.pop("maquinas", None)  # solo cuentan con hileras; A–G de siempre no cambian
     if despachador is not None:
         config_trace["aprendizaje"] = despachador.descripcion()
 

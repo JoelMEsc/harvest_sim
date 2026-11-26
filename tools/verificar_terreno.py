@@ -64,11 +64,12 @@ def revisar_trace(trace: dict) -> dict:
 
 
 def una(args):
-    escenario, estrategia, seed = args
+    escenario, estrategia, seed, movimiento = args
     logging.disable(logging.WARNING)
     base = json.loads((RAIZ / "config" / f"{escenario}.json").read_text(encoding="utf-8"))
     config = aplicar_estrategia(base, estrategia)
     config["seed"] = seed
+    config["politica"] = {**config.get("politica", {}), "movimiento": movimiento}
     inicio = time.time()
     try:
         trace = simulador_real(config)
@@ -84,8 +85,10 @@ def main(argv=None) -> int:
     parser.add_argument("--estrategias", nargs="+", default=list(ESTRATEGIAS))
     parser.add_argument("--seeds", type=int, default=20)
     parser.add_argument("--procesos", type=int, default=8)
+    parser.add_argument("--movimiento", choices=("celdas", "hileras"), default="celdas",
+                        help="hileras: cabeceras, pasadas a lo largo de las hileras y vueltas Dubins")
     args = parser.parse_args(argv)
-    trabajos = [(args.escenario, e, s) for e in args.estrategias for s in range(args.seeds)]
+    trabajos = [(args.escenario, e, s, args.movimiento) for e in args.estrategias for s in range(args.seeds)]
     with ProcessPoolExecutor(args.procesos) as ex:
         resultados = list(ex.map(una, trabajos))
     falla = False

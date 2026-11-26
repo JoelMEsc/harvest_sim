@@ -286,3 +286,34 @@ Formato por entrada:
   - El payload solo existe cuando se pide, y la mitad de lo que aprende el agente son las veces que decide seguir, además del cliff.
   - Recalcular en Unity rompe la regla de que Unity solo lee el trace (habría dos fuentes de verdad).
 - **Afecta a:** Mario Giovanni (Unity: el cargador acepta el evento nuevo; un Unity anterior rechaza los traces de `qlearning` y `sarsa`) e Ilan (pruebas). Detalle en `docs/especificacion_mejoras.md` §M1.
+
+## 2026-11-26 — Hileras: cabeceras, pasadas paralelas a las hileras y vueltas Dubins
+- **Estado:** DECIDIDO (fases H0–H3 del plan de hileras y rutas).
+- **Decisión:**
+  1. **`politica.movimiento`:** `celdas` (por defecto, el de siempre) o `hileras` (requiere mapa). Parámetros nuevos en `config.maquinas`: radio de giro de 7.5 m, 6 km/h cosechando y 5 km/h en la vuelta.
+  2. **Cobertura como Fields2Cover** (`mapa/cobertura.py`):
+     - cabecera de `k = ceil(2R / s)` celdas en los extremos de las hileras y una celda en las orillas;
+     - pasadas = tramos de fila del interior;
+     - descomposición boustrophedon en bloques;
+     - orden snake o boustrophedon, el de menor costo de vueltas.
+     - No se usa la librería: en PyPI solo hay código fuente que exige compilar C++ con GDAL y OR-tools. Se implementan sus pasos sobre la cuadrícula.
+  3. **Cabecera primero («abrir el campo»).** Una secuencia que nunca obliga a cruzar cultivo: solo se cosecha cabecera alcanzable por rastrojo o camino. Cada pasada se entra de frente desde una celda de cabecera ya cosechada; la cabecera alrededor de un obstáculo en medio del lote se cosecha cuando las pasadas llegan a ella.
+  4. **R14 (`R14_hileras`):** a una pasada se entra de frente, nunca de lado.
+  5. **Vueltas:** el cambio de pasada dura lo que la curva de Dubins (`mapa/dubins.py`, Shkel y Lumelsky): 4 ticks para una Ω de 12 m o una U de 24 m.
+  6. **Carro con hileras:** no persigue a la cosechadora mientras se traslada. Libra su paso, avanzando por el pasillo si no hay lado libre, y espera. Sin la bandera el carro sigue igual.
+- **Resultado en G** (`anticipada_plus`, seed 0):
+
+| | Celdas | Hileras |
+|---|---|---|
+| Ticks | 1463 | 1803 |
+| Ocio | 360 | 397 |
+| Entradas de lado fuera de la cabecera | 102 | 0 |
+| Pasos sobre cultivo | 23 | 0 |
+
+  Las 4 estrategias terminan sin colisiones. El tiempo sube porque las vueltas y la cabecera ahora cuestan lo que cuestan.
+- **Alternativa considerada:** compilar Fields2Cover y llamarlo desde Python; mantener el BFS y solo prohibir entrar de lado; cosechar la cabecera al final.
+- **Por qué se descartó:**
+  - Compilar Fields2Cover es una dependencia pesada para la simulación y el CI.
+  - Prohibir solo la entrada de lado deja atascos y vueltas de radio 0.
+  - Dejar la cabecera al final obliga a dar las vueltas sobre cultivo en pie.
+- **Pendiente:** H4. Los traslados todavía invierten el rumbo en un tick (29 por corrida en G); A* con rumbo lo resuelve.
