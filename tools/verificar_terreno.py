@@ -26,6 +26,7 @@ sys.path.insert(0, str(RAIZ / "src"))
 from harvest_sim.datos import validar_trace  # noqa: E402
 from harvest_sim.datos.campo import celdas_de_campo  # noqa: E402
 from harvest_sim.datos.experimentos import ESTRATEGIAS, aplicar_estrategia, simulador_real  # noqa: E402
+from harvest_sim.datos.metricas import movimiento_cosechadoras  # noqa: E402
 
 
 def revisar_trace(trace: dict) -> dict:
@@ -58,7 +59,8 @@ def revisar_trace(trace: dict) -> dict:
     m = trace["metricas"]
     return {"ticks": m["tiempo_completacion"], "ocio": m.get("tiempo_ocioso_total"), "colisiones": m["colisiones"],
             "bloqueos": eventos["BLOQUEO"], "r12": r12, "r13_carros": r13, "cosechadora_pisa": pisa_cosechadora,
-            "restr_r13": reglas["R13_cultivo_en_pie"], "entregado": m["porcentaje_entregado"]}
+            "restr_r13": reglas["R13_cultivo_en_pie"], "entregado": m["porcentaje_entregado"],
+            **movimiento_cosechadoras(trace)}
 
 
 def una(args):
@@ -102,6 +104,10 @@ def main(argv=None) -> int:
               f"bloq={suma['bloqueos']} R12={suma['r12']} R13_carros={suma['r13_carros']} "
               f"cosechadora_pisa={suma['cosechadora_pisa'] / n:.1f}/corrida restr_R13={suma['restr_r13'] / n:.1f} "
               f"entregado_min={min(r['entregado'] for r, _ in lista)} t={sum(d for _, d in lista) / n:.1f}s")
+        print(f"{'':16s} hileras: entradas_de_lado={suma['entradas_de_lado'] / n:.1f} "
+              f"pasos_sobre_cultivo={suma['pasos_sobre_cultivo'] / n:.1f} "
+              f"vueltas_instantaneas={suma['vueltas_instantaneas'] / n:.1f} "
+              f"eficiencia_campo={suma['eficiencia_campo'] / n:.1f} %")
         falla |= suma["colisiones"] > 0 or suma["r12"] > 0 or suma["r13_carros"] > 0
     print("fallas:", sum(1 for r in resultados if r[2] != "ok"), "de", len(resultados))
     return 1 if falla else 0

@@ -147,6 +147,8 @@ def calcular_metricas(fuente) -> dict:
     Terreno real (solo si el mundo trae mapa, trace 2.3; docs/especificacion_terreno.md §13):
     - metros_carro_camino, metros_carro_rastrojo, metros_carro_cultivo (totales de los carros) y
       porcentaje_carro_rastrojo: compactación del suelo (ver `suelo_de_carros`).
+    - entradas_de_lado, pasos_sobre_cultivo, vueltas_instantaneas y eficiencia_campo: qué tan realista es el
+      movimiento de las cosechadoras respecto a las hileras (ver `movimiento_cosechadoras`).
     """
     linea = linea_de_tiempo(fuente)
     T = linea.num_ticks
@@ -287,6 +289,7 @@ def calcular_metricas(fuente) -> dict:
     }
     if tiene_mapa(linea.mundo):
         metricas.update(suelo_de_carros(linea))
+        metricas.update(movimiento_cosechadoras(linea))
     if decisiones:
         metricas.update(
             decisiones_despacho=sum(decisiones.values()),
@@ -298,6 +301,47 @@ def calcular_metricas(fuente) -> dict:
     metricas["costo_total"] = metricas["costo"]["total"]
     metricas["por_agente"] = por_agente
     return metricas
+
+
+def movimiento_cosechadoras(fuente) -> dict:
+    """Realismo del movimiento de las cosechadoras respecto a las hileras, desde el log
+    (plan de hileras y rutas, fase H0). Las hileras van a lo largo del eje x de la cuadrícula: con mapa, la
+    cuadrícula está girada con el rumbo de los surcos; sin mapa, es la convención de la serpentina.
+
+    - entradas_de_lado: la cosechadora entra de lado (cambia de y) a una celda y la cosecha en ese tick, o sea,
+      corta una hilera con el cabezal atravesado. Con hileras reales debe ser 0.
+    - pasos_sobre_cultivo: entra a una celda de campo todavía en pie y no la cosecha (la pisa). Debe ser 0.
+    - vueltas_instantaneas: invierte su rumbo (E↔O, N↔S) entre dos movimientos seguidos: una vuelta de 180° con
+      radio 0. Debe ser 0.
+    - eficiencia_campo: celdas cosechadas / ticks en que alguna cosechadora estuvo fuera de la base (en %).
+    """
+    linea = linea_de_tiempo(fuente)
+    campo = celdas_de_campo(linea.mundo)
+    cosechadoras = linea.ids(COSECHADORA)
+    cosechadas: set[tuple[int, int]] = set()
+    lado = pisadas = vueltas = activos = 0
+    rumbo_anterior: dict[str, str | None] = {a: None for a in cosechadoras}
+    opuesto = {"N": "S", "S": "N", "E": "O", "O": "E"}
+    for t in linea.ticks:
+        nuevas = {tuple(c) for c in linea.celdas_nuevas[t]}
+        if t > 0:
+            for a in cosechadoras:
+                if linea.estado[a][t] not in (EN_BASE, "FIN"):
+                    activos += 1
+                antes, ahora = linea.pose[a][t - 1], linea.pose[a][t]
+                if antes is None or ahora is None or antes[:2] == ahora[:2]:
+                    continue
+                celda = ahora[:2]
+                if celda in nuevas:
+                    lado += ahora[1] != antes[1]
+                elif celda in campo and celda not in cosechadas:
+                    pisadas += 1
+                if rumbo_anterior[a] is not None and opuesto[rumbo_anterior[a]] == ahora[2]:
+                    vueltas += 1
+                rumbo_anterior[a] = ahora[2]
+        cosechadas |= nuevas
+    return {"entradas_de_lado": lado, "pasos_sobre_cultivo": pisadas, "vueltas_instantaneas": vueltas,
+            "eficiencia_campo": round(100 * len(cosechadas) / activos, 2) if activos else None}
 
 
 def suelo_de_carros(fuente) -> dict:
