@@ -49,7 +49,8 @@ def dibujar(mapa: dict, ruta: Path) -> None:
     tonos = ["#e8c547", "#d8ae2f", "#c69a1f", "#b5891a", "#a27a17"][:len(lotes)]
     colores = ["#eeeeee", "#a1887f", "#2e7d32"] + tonos + ["#c62828"]
     fig, ax = plt.subplots(figsize=(11, 11 * h / w + 1))
-    ax.imshow(g, cmap=ListedColormap(colores), origin="lower", extent=(0, w * s, 0, h * s), vmin=0, vmax=patio,
+    # y crece hacia abajo (como en Unity, donde la celda (x, y) va en (x·s, 0, −y·s)): así el dibujo no sale en espejo
+    ax.imshow(g, cmap=ListedColormap(colores), origin="upper", extent=(0, w * s, h * s, 0), vmin=0, vmax=patio,
               interpolation="nearest")
     formas = mapa["geo"]["formas"]
     for pol in formas["lotes"].values():
@@ -67,8 +68,8 @@ def dibujar(mapa: dict, ruta: Path) -> None:
     ax.legend(handles=leyenda, loc="upper right", fontsize=8, framealpha=0.9)
     ax.set_title(f"{mapa['nombre']}: {w} × {h} celdas de {s:g} m, rumbo de los surcos "
                  f"{mapa['geo']['rumbo_grados']:.1f}° (x = a lo largo de los surcos)", fontsize=10)
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
+    ax.set_xlabel("x (m), a lo largo de los surcos")
+    ax.set_ylabel("y (m), a la derecha de los surcos")
     ruta.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(ruta, dpi=110, bbox_inches="tight")
     plt.close(fig)

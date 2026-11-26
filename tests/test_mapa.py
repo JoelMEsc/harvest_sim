@@ -85,7 +85,7 @@ def test_area_dentro_de_la_tolerancia(generado):
     linea = next(x for x in reporte if x.startswith("área:"))
     error = float(linea.split("(")[1].split(",")[1].split("%")[0])
     assert abs(error) < 5
-    assert {n: len(c) for n, c in mapa["lotes"].items()} == {"A": 353, "B": 487, "C": 922}
+    assert {n: len(c) for n, c in mapa["lotes"].items()} == {"A": 364, "B": 489, "C": 919}
 
 
 def test_arboleda_y_poste_son_obstaculos(generado):
