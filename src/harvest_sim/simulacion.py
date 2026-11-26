@@ -52,8 +52,15 @@ def ejecutar(config: Config) -> dict:
             "base": list(mundo.base_de(agente.agent_id)),
         })
 
+    # el mapa ya va completo en `mundo`; en `config` solo se anota cuál es
+    config_trace = asdict(config)
+    if config.mapa:
+        config_trace["mapa"] = {"archivo": config.mapa["archivo"], "sha256": config.mapa["sha256"]}
+    else:
+        config_trace.pop("mapa", None)
+
     constructor = TraceBuilder(
-        asdict(config),
+        config_trace,
         mundo.descripcion(),
         catalogo,
     )

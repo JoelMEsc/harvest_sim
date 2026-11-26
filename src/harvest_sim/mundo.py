@@ -38,15 +38,35 @@ class Mundo:
         self.grano_por_celda = config.grano_por_celda
         self.entregado = 0
 
-        # asignar las bases según la cantidad de agentes
+        # Mapa real (trace 2.3, docs/especificacion_terreno.md): bodega, bases, obstáculos, caminos, fuera de
+        # campo y lotes vienen del mapa. Sin mapa, el mundo rectangular de siempre.
+        self.mapa = config.mapa
         self._bases: dict[str, Celda] = {}
-        for indice in range(1, config.num_carros + 1):
-            self._bases[f"carro_{indice}"] = (indice, 0)
-        for indice in range(1, config.num_cosechadoras + 1):
-            self._bases[f"cosechadora_{indice}"] = (config.num_carros + indice, 0)
-
-        self._lista_obstaculos = expandir_obstaculos(config.obstaculos, self.ancho, self.alto)
+        if self.mapa:
+            self.bodega = tuple(self.mapa["bodega"])
+            bases = [tuple(b) for b in self.mapa["bases"]]
+            for indice in range(1, config.num_carros + 1):
+                self._bases[f"carro_{indice}"] = bases[indice - 1]
+            for indice in range(1, config.num_cosechadoras + 1):
+                self._bases[f"cosechadora_{indice}"] = bases[config.num_carros + indice - 1]
+            self._lista_obstaculos = [list(c) for c in self.mapa["obstaculos"]]
+            self.celdas_camino: frozenset[Celda] = frozenset(tuple(c) for c in self.mapa["caminos"])
+            self.fuera_de_campo: frozenset[Celda] = frozenset(tuple(c) for c in self.mapa["fuera_de_campo"])
+            self.tamano_celda_m = float(self.mapa["tamano_celda_m"])
+        else:
+            for indice in range(1, config.num_carros + 1):
+                self._bases[f"carro_{indice}"] = (indice, 0)
+            for indice in range(1, config.num_cosechadoras + 1):
+                self._bases[f"cosechadora_{indice}"] = (config.num_carros + indice, 0)
+            self._lista_obstaculos = expandir_obstaculos(config.obstaculos, self.ancho, self.alto)
+            self.celdas_camino = frozenset()
+            self.fuera_de_campo = frozenset()
+            self.tamano_celda_m = None
         self.obstaculos: frozenset[Celda] = frozenset(tuple(c) for c in self._lista_obstaculos)
+        # R10 y R12: nadie entra a obstáculos ni sale del predio
+        self._fijas_todos: frozenset[Celda] = self.obstaculos | self.fuera_de_campo
+        # R13: solo con mapa y la política activada
+        self.respetar_cultivo = bool(self.mapa) and bool(config.politica.get("respetar_cultivo", False))
 
         self._agentes = {}
         self._cosechadas: dict[Celda, int] = {}  # celda -> grano obtenido
@@ -57,8 +77,11 @@ class Mundo:
 
         descripcion = self._descripcion_sin_rendimiento()
         self._celdas_campo = celdas_de_campo(descripcion)
+        # cultivo en pie: baja con cada cosecha (R13 lo usa en cada tick sin recalcularlo)
+        self._en_pie: set[Celda] = set(self._celdas_campo)
         self._rendimiento = self._sortear_rendimiento()
-        self._franjas = self._calcular_franjas()
+        self._franjas = [] if self.mapa else self._calcular_franjas()
+        self._zonas = self._calcular_zonas() if self.mapa else {}
         self.grano_total = grano_esperado(self.descripcion())
 
     # ------------------------------------------------------------------ agentes
@@ -99,11 +122,23 @@ class Mundo:
         }
 
     def bloqueadas_fijas(self, agent_id: str) -> set[Celda]:
-        """Obstáculos para todos (R10); además, la bodega para las cosechadoras (R9)."""
-        fijas = set(self.obstaculos)
+        """Obstáculos (R10) y fuera de campo (R12) para todos; además, la bodega para las cosechadoras (R9)."""
+        fijas = set(self._fijas_todos)
         if agent_id.startswith("cosechadora_"):
             fijas.add(self.bodega)
         return fijas
+
+    def bloqueadas_para(self, agent_id: str) -> set[Celda]:
+        """Lo que el agente no puede pisar ahora: las fijas y, para los carros con R13 activa, el cultivo en
+        pie (docs/especificacion_terreno.md §7). Crece lo transitable conforme hay más rastrojo."""
+        fijas = self.bloqueadas_fijas(agent_id)
+        if self.respetar_cultivo and agent_id.startswith("carro_"):
+            fijas |= self._en_pie
+        return fijas
+
+    def cultivo_en_pie(self) -> set[Celda]:
+        """Celdas de campo que todavía no se cosechan (no modificar: es el conjunto del mundo)."""
+        return self._en_pie
 
     @staticmethod
     def _tipo(agent_id: str) -> str:
@@ -119,6 +154,20 @@ class Mundo:
             "bases": {identificador: list(celda) for identificador, celda in self._bases.items()},
             "grano_por_celda": self.grano_por_celda,
             "obstaculos": [list(celda) for celda in self._lista_obstaculos],
+            **self._descripcion_mapa(),
+        }
+
+    def _descripcion_mapa(self) -> dict:
+        """Campos del trace 2.3 (solo con mapa)."""
+        if not self.mapa:
+            return {}
+        return {
+            "tamano_celda_m": self.tamano_celda_m,
+            "caminos": [list(c) for c in self.mapa["caminos"]],
+            "fuera_de_campo": [list(c) for c in self.mapa["fuera_de_campo"]],
+            "lotes": {n: [list(c) for c in cs] for n, cs in self.mapa["lotes"].items()},
+            **({"altura_m": self.mapa["altura_m"]} if "altura_m" in self.mapa else {}),
+            "geo": self.mapa["geo"],
         }
 
     def _sortear_rendimiento(self) -> dict[Celda, int]:
@@ -175,9 +224,99 @@ class Mundo:
         """Filas de la franja de cada cosechadora (en orden: cosechadora_1, cosechadora_2, ...)."""
         return [list(f) for f in self._franjas]
 
+    def zonas(self) -> dict[str, list[str]]:
+        """Con mapa: los lotes (o partes de lote) de cada cosechadora, en el orden en que los recorre."""
+        return {a: [n for n, _ in unidades] for a, unidades in self._zonas.items()}
+
+    def _calcular_zonas(self) -> dict[str, list[tuple[str, list[Celda]]]]:
+        """Reparte los lotes completos entre las cosechadoras (el más grande a la que lleva menos celdas). Si
+        hay más cosechadoras que lotes, parte el más grande en bandas de filas. Cada unidad se recorre en
+        boustrophedon empezando por la orilla que toca un camino (docs/especificacion_terreno.md §9)."""
+        m = self.config.num_cosechadoras
+        unidades = [(n, {tuple(c) for c in cs} & self._celdas_campo) for n, cs in self.mapa["lotes"].items()]
+        unidades = [u for u in unidades if u[1]]
+        while len(unidades) < m:
+            nombre, celdas = max(unidades, key=lambda u: (len(u[1]), u[0]))
+            unidades.remove((nombre, celdas))
+            filas = sorted({y for _, y in celdas})
+            acumulado, corte = 0, filas[0]
+            for y in filas:
+                acumulado += sum(1 for c in celdas if c[1] == y)
+                corte = y
+                if acumulado >= len(celdas) / 2:
+                    break
+            a = {c for c in celdas if c[1] <= corte}
+            b = celdas - a
+            if not b:  # una sola fila: se parte por x
+                xs = sorted(x for x, _ in celdas)
+                a = {c for c in celdas if c[0] <= xs[len(xs) // 2 - 1]}
+                b = celdas - a
+            unidades += [(f"{nombre}/1", a), (f"{nombre}/2", b)]
+
+        dist = self._distancias_por_camino()
+        asignacion = {f"cosechadora_{j}": [] for j in range(1, m + 1)}
+        cargas = dict.fromkeys(asignacion, 0)
+        for nombre, celdas in sorted(unidades, key=lambda u: (-len(u[1]), u[0])):
+            j = min(asignacion, key=lambda a: (cargas[a], int(a.rsplit("_", 1)[1])))
+            asignacion[j].append((nombre, celdas))
+            cargas[j] += len(celdas)
+        zonas = {}
+        for agente, lista in asignacion.items():
+            lista.sort(key=lambda u: (min(self._a_camino(c, dist) for c in u[1]), u[0]))
+            zonas[agente] = [(n, self._boustrophedon(celdas, dist)) for n, celdas in lista]
+        return zonas
+
+    def _distancias_por_camino(self) -> dict[Celda, int]:
+        """Distancia (en celdas) de la bodega a cada celda de camino o patio, andando solo por camino."""
+        dist = {self.bodega: 0}
+        cola = [self.bodega]
+        for celda in cola:
+            for v in self.vecinos(celda):
+                if v in self.celdas_camino and v not in dist:
+                    dist[v] = dist[celda] + 1
+                    cola.append(v)
+        return dist
+
+    def _a_camino(self, celda: Celda, dist: dict[Celda, int]) -> int:
+        """Qué tan lejos queda una celda de la bodega por camino: 0 + distancia si toca un camino; si no,
+        castigada con la distancia Manhattan al camino más cercano."""
+        cerca = [dist[v] for v in self.vecinos(celda) if v in dist]
+        if cerca:
+            return min(cerca)
+        return 10_000 + min(abs(celda[0] - c[0]) + abs(celda[1] - c[1]) for c in dist)
+
+    def _boustrophedon(self, celdas: set[Celda], dist: dict[Celda, int]) -> list[Celda]:
+        """Orden de cosecha de una unidad: una fila es una pasada. Empieza en la fila de una orilla y en el
+        extremo más cercano a un camino; cada fila siguiente, en el extremo más cercano al final de la
+        anterior."""
+        filas = sorted({y for _, y in celdas})
+        por_fila = {y: sorted(x for x, yy in celdas if yy == y) for y in filas}
+        opciones = []
+        for orden in (filas, filas[::-1]):
+            primera = por_fila[orden[0]]
+            for inicio_x in (primera[0], primera[-1]):
+                opciones.append((self._a_camino((inicio_x, orden[0]), dist), orden == filas, inicio_x, orden))
+        _, _, inicio_x, orden = min(opciones, key=lambda o: (o[0], not o[1], o[2]))
+        recorrido: list[Celda] = []
+        for y in orden:
+            xs = por_fila[y]
+            if not recorrido:
+                fila = xs if inicio_x == xs[0] else xs[::-1]
+            else:
+                ux, uy = recorrido[-1]
+                ida = abs(xs[0] - ux) + abs(y - uy)
+                vuelta = abs(xs[-1] - ux) + abs(y - uy)
+                fila = xs if ida <= vuelta else xs[::-1]
+            recorrido.extend((x, y) for x in fila)
+        return recorrido
+
     def camino(self, agent_id: str) -> list[Celda]:
         """Serpentina de la franja de esa cosechadora, sin obstáculos. Paridad global (fila impar:
         x creciente), así que con una cosechadora y sin obstáculos es la serpentina de v0.1."""
+        if agent_id not in self._caminos and self.mapa:
+            if agent_id not in self._zonas:
+                raise KeyError(agent_id)
+            self._caminos[agent_id] = [c for _, recorrido in self._zonas[agent_id] for c in recorrido]
         if agent_id not in self._caminos:
             if not agent_id.startswith("cosechadora_"):
                 raise ValueError(f"solo las cosechadoras tienen camino: {agent_id}")
@@ -204,7 +343,7 @@ class Mundo:
     ) -> list[Celda] | None:
         """Ruta más corta (módulo de rutas); los obstáculos siempre cuentan como bloqueados."""
         return rutas.bfs(
-            origen, destino, self.ancho, self.alto, set(bloqueadas) | self.obstaculos
+            origen, destino, self.ancho, self.alto, set(bloqueadas) | self._fijas_todos
         )
 
     # ---------------------------------------------------------------- reservas
@@ -279,6 +418,7 @@ class Mundo:
 
         agente.carga += cantidad
         self._cosechadas[celda] = cantidad
+        self._en_pie.discard(celda)
 
         self._eventos.append({
             "tipo": "CELDA_COSECHADA",

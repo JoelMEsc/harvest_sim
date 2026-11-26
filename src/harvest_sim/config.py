@@ -8,6 +8,7 @@ defecto, que reproducen la primera entrega.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -23,6 +24,9 @@ POLITICA_POR_DEFECTO = {
     "encadenar_servicios": False,
     "espera_propuestas": 2,
     "reintento_subasta": 3,
+    # R13 (docs/especificacion_terreno.md §7): los carros no pisan el cultivo en pie. Solo tiene efecto
+    # con mapa; apagado por defecto para que A-F no cambien.
+    "respetar_cultivo": False,
 }
 INCERTIDUMBRE_POR_DEFECTO = {
     # None = {minimo: grano_por_celda, maximo: grano_por_celda}: depende de otro campo
@@ -66,6 +70,9 @@ class Config:
     incertidumbre: dict = field(default_factory=dict)  # se completa en __post_init__ (depende de grano)
     combustible: dict = field(default_factory=lambda: copy.deepcopy(COMBUSTIBLE_POR_DEFECTO))
     costo: dict = field(default_factory=lambda: copy.deepcopy(COSTO_POR_DEFECTO))
+    # Mapa real (docs/especificacion_terreno.md §5): el contenido de config/mapas/*.json, más "archivo" y
+    # "sha256". None = el mundo rectangular de siempre.
+    mapa: dict | None = None
 
     def __post_init__(self) -> None:
         # Un Config creado en código (pruebas) también trae todas las claves de cada sección.
@@ -83,8 +90,36 @@ class Config:
 
 # Campos que todo JSON de escenario debe traer (los de la primera entrega; obstaculos tiene defecto).
 OBLIGATORIOS = tuple(
-    f.name for f in fields(Config) if f.name not in SECCIONES_OPCIONALES + ("obstaculos",)
+    f.name for f in fields(Config) if f.name not in SECCIONES_OPCIONALES + ("obstaculos", "mapa")
 )
+
+# Carpeta config/ del repositorio: ahí se buscan los mapas si no están junto al JSON del escenario
+# (los experimentos y el servidor escriben la configuración en un directorio temporal).
+CARPETA_CONFIG = Path(__file__).resolve().parents[2] / "config"
+CLAVES_MAPA = ("tamano_celda_m", "ancho", "alto", "bodega", "bases", "obstaculos", "caminos", "fuera_de_campo",
+               "lotes", "geo")
+
+
+def cargar_mapa(nombre: str, carpeta: str | Path | None = None) -> dict:
+    """Lee config/mapas/*.json (relativo a `carpeta` o a config/ del repo) y le agrega archivo y sha256."""
+    if not isinstance(nombre, str) or not nombre.strip():
+        raise ValueError("config: mapa debe ser la ruta de un archivo de config/mapas/")
+    candidatos = [Path(nombre)] if Path(nombre).is_absolute() else \
+        [Path(carpeta) / nombre] * (carpeta is not None) + [CARPETA_CONFIG / nombre]
+    ruta = next((c for c in candidatos if c.is_file()), None)
+    if ruta is None:
+        raise ValueError(f"config: no existe el mapa {nombre}")
+    texto = ruta.read_bytes()
+    try:
+        mapa = json.loads(texto.decode("utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"config: el mapa {nombre} no es JSON válido: {error}") from error
+    faltan = [c for c in CLAVES_MAPA if c not in mapa]
+    if faltan:
+        raise ValueError(f"config: al mapa {nombre} le falta {faltan[0]}")
+    mapa["archivo"] = nombre
+    mapa["sha256"] = hashlib.sha256(texto).hexdigest()
+    return mapa
 
 
 def _incertidumbre_por_defecto(grano_por_celda: int) -> dict:
@@ -126,7 +161,7 @@ def _validar_secciones(datos: dict) -> None:
         raise ValueError(f"config: politica.asignacion debe ser una de {list(ASIGNACIONES)}")
     if not _es_numero(pol["umbral_aviso"]) or not 0 < pol["umbral_aviso"] <= 1:
         raise ValueError("config: politica.umbral_aviso debe estar en (0, 1]")
-    for clave in ("atender_desde_bodega", "encadenar_servicios"):
+    for clave in ("atender_desde_bodega", "encadenar_servicios", "respetar_cultivo"):
         if not isinstance(pol[clave], bool):
             raise ValueError(f"config: politica.{clave} debe ser true o false")
     if not _es_entero(pol["espera_propuestas"]) or pol["espera_propuestas"] < 2:
@@ -172,6 +207,18 @@ def cargar_config(ruta: str | Path) -> Config:
     if not isinstance(datos, dict):
         raise ValueError("config: se esperaba un objeto JSON")
 
+    # con mapa, el tamaño y los obstáculos vienen del mapa
+    if "mapa" in datos and datos["mapa"] is not None:
+        mapa = cargar_mapa(datos["mapa"], Path(ruta).parent)
+        for clave in ("ancho", "alto"):
+            if clave in datos and datos[clave] != mapa[clave]:
+                raise ValueError(f"config: {clave} ({datos[clave]}) no coincide con el del mapa ({mapa[clave]})")
+            datos[clave] = mapa[clave]
+        obst = datos.get("obstaculos") or {}
+        if obst.get("celdas") or obst.get("regiones"):
+            raise ValueError("config: con mapa, los obstáculos vienen del mapa (quita la sección obstaculos)")
+        datos["mapa"] = mapa
+
     # verificar que estén los campos obligatorios y ninguno desconocido
     conocidos = {campo.name for campo in fields(Config)}
     faltantes = set(OBLIGATORIOS) - datos.keys()
@@ -208,15 +255,20 @@ def cargar_config(ruta: str | Path) -> Config:
         if type(valor) is not int or valor <= 0:
             raise ValueError(f"config: {campo} debe ser un entero positivo")
 
-    if datos["ancho"] < 1 + datos["num_carros"] + datos["num_cosechadoras"]:
-        raise ValueError("config: ancho insuficiente para la bodega y las bases")
+    if datos.get("mapa") is not None:
+        if len(datos["mapa"]["bases"]) < datos["num_carros"] + datos["num_cosechadoras"]:
+            raise ValueError(f"config: el mapa tiene {len(datos['mapa']['bases'])} bases y hay "
+                             f"{datos['num_carros'] + datos['num_cosechadoras']} agentes")
+    else:
+        if datos["ancho"] < 1 + datos["num_carros"] + datos["num_cosechadoras"]:
+            raise ValueError("config: ancho insuficiente para la bodega y las bases")
 
-    if datos["alto"] < 2:
-        raise ValueError("config: alto debe ser al menos 2")
+        if datos["alto"] < 2:
+            raise ValueError("config: alto debe ser al menos 2")
 
-    # cada cosechadora recorre una franja de al menos una fila del campo (filas 1..alto-1)
-    if datos["alto"] - 1 < datos["num_cosechadoras"]:
-        raise ValueError("config: alto insuficiente: cada cosechadora necesita al menos una fila del campo")
+        # cada cosechadora recorre una franja de al menos una fila del campo (filas 1..alto-1)
+        if datos["alto"] - 1 < datos["num_cosechadoras"]:
+            raise ValueError("config: alto insuficiente: cada cosechadora necesita al menos una fila del campo")
 
     if datos["capacidad_carro"] < datos["capacidad_cosechadora"]:
         raise ValueError(
