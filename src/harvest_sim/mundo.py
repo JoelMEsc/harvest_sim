@@ -334,6 +334,30 @@ class Mundo:
         self._entradas.update(entradas)
         return recorrido
 
+    def costos_de_giro(self, carro: bool = False) -> tuple[int, int]:
+        """(giro de 90°, media vuelta en K) en ticks extra para el A* con rumbo de los traslados. 90°: el cuarto de
+        circunferencia (πR/2) a su velocidad, en ticks (un tick = una celda a velocidad de cosecha), menos el tick
+        de avance; la vuelta en K, dos de ellos. El carro usa su propio radio y su velocidad."""
+        m = self.config.maquinas
+        if carro:
+            radio, velocidad = m["radio_giro_carro_m"], m["velocidad_carro_kmh"]
+        else:
+            radio, velocidad = m["radio_giro_m"], m["velocidad_vuelta_kmh"]
+        cuarto = math.pi * radio / 2 / self.tamano_celda_m * m["velocidad_cosecha_kmh"] / velocidad
+        giro90 = max(0, math.ceil(cuarto - 1e-9) - 1)
+        return giro90, 2 * (giro90 + 1)
+
+    def planear_con_rumbo(self, origen: Celda, rumbo: str, destino: Celda, tick: int, bloqueadas: set[Celda],
+                          reservas, horizonte: int = rutas.HORIZONTE, permanencia: int | None = None,
+                          carro: bool = False):
+        """Con hileras, los traslados usan A* con rumbo (el giro cuesta tiempo); sin hileras, el BFS de siempre."""
+        if not self.hileras:
+            return rutas.bfs_tiempo(origen, destino, tick, self.ancho, self.alto, bloqueadas, reservas, horizonte,
+                                    permanencia)
+        giro90, giro180 = self.costos_de_giro(carro=carro)
+        return rutas.astar_rumbo_tiempo(origen, rumbo, destino, tick, self.ancho, self.alto, bloqueadas, reservas,
+                                        giro90, giro180, horizonte, permanencia)
+
     def entrada_de_pasada(self, celda: Celda) -> tuple[Celda, str] | None:
         """Si `celda` es el inicio de una pasada (con hileras): la celda de cabecera desde la que se entra y el
         rumbo de la pasada. R14: a una pasada se entra de frente, a lo largo de las hileras, nunca de lado."""

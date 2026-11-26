@@ -311,8 +311,8 @@ def movimiento_cosechadoras(fuente) -> dict:
     - entradas_de_lado: la cosechadora entra de lado (cambia de y) a una celda y la cosecha en ese tick, o sea,
       corta una hilera con el cabezal atravesado. Con hileras reales debe ser 0.
     - pasos_sobre_cultivo: entra a una celda de campo todavía en pie y no la cosecha (la pisa). Debe ser 0.
-    - vueltas_instantaneas: invierte su rumbo (E↔O, N↔S) entre dos movimientos seguidos: una vuelta de 180° con
-      radio 0. Debe ser 0.
+    - vueltas_instantaneas: invierte su rumbo (E↔O, N↔S) entre dos movimientos seguidos sin haberse detenido
+      al menos 2 ticks a dar la vuelta (una vuelta en K): una vuelta de 180° con radio 0 y sin tiempo. Debe ser 0.
     - eficiencia_campo: celdas cosechadas / ticks en que alguna cosechadora estuvo fuera de la base (en %).
     """
     linea = linea_de_tiempo(fuente)
@@ -321,6 +321,7 @@ def movimiento_cosechadoras(fuente) -> dict:
     cosechadas: set[tuple[int, int]] = set()
     lado = pisadas = vueltas = activos = 0
     rumbo_anterior: dict[str, str | None] = {a: None for a in cosechadoras}
+    quieta: dict[str, int] = {a: 0 for a in cosechadoras}  # ticks sin moverse desde el último movimiento
     opuesto = {"N": "S", "S": "N", "E": "O", "O": "E"}
     for t in linea.ticks:
         nuevas = {tuple(c) for c in linea.celdas_nuevas[t]}
@@ -330,15 +331,17 @@ def movimiento_cosechadoras(fuente) -> dict:
                     activos += 1
                 antes, ahora = linea.pose[a][t - 1], linea.pose[a][t]
                 if antes is None or ahora is None or antes[:2] == ahora[:2]:
+                    quieta[a] += 1
                     continue
                 celda = ahora[:2]
                 if celda in nuevas:
                     lado += ahora[1] != antes[1]
                 elif celda in campo and celda not in cosechadas:
                     pisadas += 1
-                if rumbo_anterior[a] is not None and opuesto[rumbo_anterior[a]] == ahora[2]:
+                if rumbo_anterior[a] is not None and opuesto[rumbo_anterior[a]] == ahora[2] and quieta[a] < 2:
                     vueltas += 1
                 rumbo_anterior[a] = ahora[2]
+                quieta[a] = 0
         cosechadas |= nuevas
     return {"entradas_de_lado": lado, "pasos_sobre_cultivo": pisadas, "vueltas_instantaneas": vueltas,
             "eficiencia_campo": round(100 * len(cosechadas) / activos, 2) if activos else None}

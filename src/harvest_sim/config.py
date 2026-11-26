@@ -58,7 +58,9 @@ COSTO_POR_DEFECTO = {"pesos": dict(PESOS_COSTO)}
 # Plan de hileras y rutas: lo que limita el movimiento con politica.movimiento = "hileras". Supuestos de una
 # cosechadora con cabezal maicero de 16 hileras (12 m): radio de giro mínimo ~7.5 m, ~6 km/h cosechando y ~5
 # km/h en la vuelta de cabecera. Con "celdas" no se usan (ni van al trace).
-MAQUINAS_POR_DEFECTO = {"radio_giro_m": 7.5, "velocidad_cosecha_kmh": 6.0, "velocidad_vuelta_kmh": 5.0}
+MAQUINAS_POR_DEFECTO = {"radio_giro_m": 7.5, "velocidad_cosecha_kmh": 6.0, "velocidad_vuelta_kmh": 5.0,
+                        # tractor con carro tolva: gira más cerrado y anda más rápido en el campo que la cosechadora
+                        "radio_giro_carro_m": 6.0, "velocidad_carro_kmh": 10.0}
 
 ASIGNACIONES = ("directa", "subasta")
 AVISOS = ("umbral", "qlearning", "sarsa")

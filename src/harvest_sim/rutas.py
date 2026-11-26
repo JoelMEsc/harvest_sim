@@ -381,3 +381,131 @@ def clasificar_desvio(
     if con_intercambio is None or len(ruta) > len(con_intercambio):
         reglas.append(R4_INTERCAMBIO)
     return reglas
+
+
+# --- A* con rumbo (plan de hileras y rutas, fase H4) ---------------------------------------------------------------
+
+RUMBOS = {"N": (0, -1), "E": (1, 0), "S": (0, 1), "O": (-1, 0)}
+_DELTA_A_RUMBO = {v: k for k, v in RUMBOS.items()}
+_OPUESTO = {"N": "S", "S": "N", "E": "O", "O": "E"}
+
+
+def astar_rumbo_tiempo(
+    origen: Celda,
+    rumbo: str,
+    destino: Celda,
+    tick: int,
+    ancho: int,
+    alto: int,
+    bloqueadas: set[Celda],
+    reservas: Reservas,
+    giro90: int = 1,
+    giro180: int = 4,
+    horizonte: int = HORIZONTE,
+    permanencia: int | None = None,
+) -> list[PasoEnTiempo] | None:
+    """Ruta en espacio-tiempo con rumbo, para máquinas con radio de giro (A* sobre (celda, rumbo, tick)).
+
+    Es la idea de Hybrid A* / *state lattice* llevada a la cuadrícula: el estado incluye hacia dónde apunta la
+    máquina y cambiar de rumbo cuesta tiempo, en lugar del BFS donde voltear es gratis:
+    - seguir derecho a la celda de enfrente: 1 tick;
+    - girar 90° y pasar a la celda de un lado: `giro90` ticks girando en su celda y 1 de avance;
+    - dar media vuelta (vuelta en K) sin moverse: `giro180` ticks en su celda; después queda al revés;
+    - esperar: 1 tick (solo dentro del horizonte, para dejar pasar a otros).
+    Mientras t <= tick + horizonte respeta las reservas de los demás (cada tick que ocupa una celda debe estar
+    libre) y no se intercambia con nadie, igual que `bfs_tiempo`. Después del horizonte el tiempo deja de
+    importar y sigue como Dijkstra sobre (celda, rumbo). Heurística: distancia Manhattan (admisible: cada
+    celda cuesta al menos un tick). Determinista: desempata por (f, t, orden N, E, S, O).
+
+    Devuelve [(celda, t), ...] un elemento por tick, sin el origen y con el destino (las esperas y los giros
+    aparecen como la misma celda repetida); [] si origen == destino; None si no hay ruta."""
+    import heapq
+
+    if origen == destino:
+        return []
+    if destino in bloqueadas:
+        return None
+    limite = tick + horizonte
+    ocupado_destino = sorted(t for (celda, t) in reservas if celda == destino and tick < t <= limite)
+
+    def puede_quedarse(t_llegada: int) -> bool:
+        hasta = limite if permanencia is None else t_llegada + permanencia
+        return not any(t_llegada < t <= hasta for t in ocupado_destino)
+
+    def libre(celda: Celda, desde: int, hasta: int) -> bool:
+        """¿Nadie más tiene `celda` en los ticks desde..hasta (los que caen dentro del horizonte)?"""
+        return not any((celda, t) in reservas for t in range(desde, min(hasta, limite) + 1))
+
+    def h(celda: Celda) -> int:
+        return abs(celda[0] - destino[0]) + abs(celda[1] - destino[1])
+
+    def clave(celda: Celda, r: str, t: int):
+        return (celda, r, t) if t <= limite else (celda, r, None)
+
+    inicio = (origen, rumbo, tick)
+    padre: dict = {clave(*inicio): None}
+    costo = {clave(*inicio): 0}
+    cola = [(h(origen), tick, 0, origen, rumbo)]
+    orden_rumbos = ("N", "E", "S", "O")
+    contador = 0
+    while cola:
+        _, t, _, celda, r = heapq.heappop(cola)
+        estado = clave(celda, r, t)
+        acciones: list[tuple[Celda, str, int]] = []  # (celda destino, rumbo nuevo, ticks)
+        if t + 1 <= limite:
+            acciones.append((celda, r, 1))  # esperar
+        for nuevo in orden_rumbos:
+            dx, dy = RUMBOS[nuevo]
+            vecino = (celda[0] + dx, celda[1] + dy)
+            if not (0 <= vecino[0] < ancho and 0 <= vecino[1] < alto) or vecino in bloqueadas:
+                continue
+            if nuevo == r:
+                acciones.append((vecino, nuevo, 1))
+            elif nuevo != _OPUESTO[r]:
+                acciones.append((vecino, nuevo, giro90 + 1))
+        acciones.append((celda, _OPUESTO[r], giro180))  # vuelta en K
+        for siguiente, nuevo, dur in acciones:
+            t_sig = t + dur
+            if t + 1 <= limite:
+                # mientras gira (o espera) sigue en su celda; el último tick ya está en `siguiente`
+                if dur > 1 and not libre(celda, t + 1, t + dur - (0 if siguiente == celda else 1)):
+                    continue
+                if not libre(siguiente, t_sig, t_sig):
+                    continue
+                if siguiente != celda:
+                    otro = reservas.get((siguiente, t_sig - 1))
+                    if otro is not None and reservas.get((celda, t_sig)) == otro:
+                        continue
+            k = clave(siguiente, nuevo, t_sig)
+            g = costo[estado] + dur
+            if k in costo and costo[k] <= g:
+                continue
+            costo[k] = g
+            padre[k] = (estado, siguiente, t_sig, dur)
+            if siguiente == destino and puede_quedarse(t_sig):
+                return _reconstruir_rumbo(padre, k, origen, tick)
+            contador += 1
+            heapq.heappush(cola, (g + h(siguiente), t_sig, contador, siguiente, nuevo))
+    return None
+
+
+def _reconstruir_rumbo(padre: dict, final, origen: Celda, tick: int) -> list[PasoEnTiempo]:
+    """Plan tick por tick: cada acción de `dur` ticks ocupa su celda de origen dur − 1 ticks y luego avanza."""
+    acciones = []
+    k = final
+    while padre[k] is not None:
+        anterior, celda, t_sig, dur = padre[k]
+        acciones.append((anterior, celda, t_sig, dur))
+        k = anterior
+    acciones.reverse()
+    plan: list[PasoEnTiempo] = []
+    actual = origen
+    t = tick
+    for _, celda, t_sig, dur in acciones:
+        for _ in range(dur - 1):
+            t += 1
+            plan.append((actual, t))
+        t += 1
+        plan.append((celda, t))
+        actual = celda
+    return plan
