@@ -1,0 +1,9 @@
+{
+  "nombre": "terreno_g_pendiente",
+  "descripcion": "Terreno real (P7): barrido del factor de pendiente del consumo de combustible en G, con anticipada_plus y 20 seeds. 0 = el relieve no cuenta.",
+  "escenarios": ["config/escenario_g.json"],
+  "estrategias": ["anticipada_plus"],
+  "barrido": {"combustible.factor_pendiente": [0, 1, 2, 4, 8]},
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "combustible_usado"
+}

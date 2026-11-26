@@ -16,7 +16,7 @@ promedios se redondean a 4 decimales y, si son enteros, se dejan como enteros (2
 
 from __future__ import annotations
 
-from .campo import grano_esperado
+from .campo import celdas_de_campo, grano_esperado, tiene_mapa
 from .formato import (
     ACEPTACION,
     CARRO,
@@ -141,6 +141,9 @@ def calcular_metricas(fuente) -> dict:
       transferir).
     - costo: {"pesos", "terminos": {nombre: peso · valor}, "total"} y costo_total (J, especificación §11).
     - por_agente: {agent_id: {...}} con el detalle de cada agente (incluye ticks_por_estado y espera_por_ciclo).
+    Terreno real (solo si el mundo trae mapa, trace 2.3; docs/especificacion_terreno.md §13):
+    - metros_carro_camino, metros_carro_rastrojo, metros_carro_cultivo (totales de los carros) y
+      porcentaje_carro_rastrojo: compactación del suelo (ver `suelo_de_carros`).
     """
     linea = linea_de_tiempo(fuente)
     T = linea.num_ticks
@@ -275,10 +278,44 @@ def calcular_metricas(fuente) -> dict:
         "rechazos_por_motivo": rechazos_por_motivo,
         "respuesta_promedio": _promedio(respuestas),
     }
+    if tiene_mapa(linea.mundo):
+        metricas.update(suelo_de_carros(linea))
     metricas["costo"] = costo_j(metricas, linea.config)
     metricas["costo_total"] = metricas["costo"]["total"]
     metricas["por_agente"] = por_agente
     return metricas
+
+
+def suelo_de_carros(fuente) -> dict:
+    """Metros que recorren los carros según el suelo que pisan, desde el log (sin campos nuevos en el trace).
+
+    Cada vez que la celda de un carro cambia, cuenta `tamano_celda_m` metros en la celda a la que entra:
+    rastrojo si es campo ya cosechado (en ese tick o antes), cultivo si es campo todavía en pie (con R13
+    debe ser 0) y camino en cualquier otro caso (caminos, patio de la bodega y bases). El rastrojo es el
+    suelo que se compacta; el camino ya está compactado."""
+    linea = linea_de_tiempo(fuente)
+    s = linea.mundo.get("tamano_celda_m") or 1
+    campo = celdas_de_campo(linea.mundo)
+    cosechadas: set[tuple[int, int]] = set()
+    pasos = {"camino": 0, "rastrojo": 0, "cultivo": 0}
+    carros = linea.ids(CARRO)
+    for t in linea.ticks:
+        cosechadas.update(tuple(c) for c in linea.celdas_nuevas[t])
+        if t == 0:
+            continue
+        for a in carros:
+            celda = linea.celda(a, t)
+            if celda is None or celda == linea.celda(a, t - 1):
+                continue
+            if celda not in campo:
+                pasos["camino"] += 1
+            else:
+                pasos["rastrojo" if celda in cosechadas else "cultivo"] += 1
+    total = sum(pasos.values())
+    return {"metros_carro_camino": _numero(pasos["camino"] * s, 2),
+            "metros_carro_rastrojo": _numero(pasos["rastrojo"] * s, 2),
+            "metros_carro_cultivo": _numero(pasos["cultivo"] * s, 2),
+            "porcentaje_carro_rastrojo": round(100 * pasos["rastrojo"] / total, 2) if total else None}
 
 
 # Pesos por defecto de J (especificación de la segunda entrega §2 y §11).

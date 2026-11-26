@@ -10,6 +10,8 @@ La simulación está escrita en Python y produce un log por corrida (`trace.json
 
 > **Estado (24 de noviembre de 2026): segunda entrega integrada en `development`.** Varios agentes (franjas), obstáculos, rutas en el tiempo con reservas, subasta Contract Net con despacho anticipado, aleatoriedad con semilla, combustible con recargas, restricciones de seguridad registradas, costo J y servidor FastAPI para Unity. Seis escenarios (A–F): A, B y C siguen dando exactamente las métricas de la primera entrega (`tests/test_regresion.py`). **Resultados y respuestas a la retro:** [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md). Qué se construyó: [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md). Visualización 3D: [`harvest-simu-visualization`](https://github.com/GioMax102/harvest-simu-visualization).
 
+> **Terreno real (25 de noviembre de 2026).** El escenario **G** simula el cultivo real de **El Pueblito** (Teocaltiche, Jalisco) a partir del KML: 3 lotes, arboleda y caminos en una cuadrícula de 12 m orientada con los surcos, relieve del DEM Copernicus GLO-30 y dos reglas nuevas (R12: nadie sale del predio; R13: los carros no pisan el cultivo en pie). El trace pasa a **2.3** solo cuando hay mapa; A–F no cambian. Resultados: [`docs/resultados_terreno.md`](docs/resultados_terreno.md). Contrato: [`docs/especificacion_terreno.md`](docs/especificacion_terreno.md).
+
 ---
 
 ## Inicio rápido
@@ -40,11 +42,16 @@ Otras formas de correr la segunda entrega:
 ```bash
 python -m harvest_sim.cli config/escenario_e.json --estrategia anticipada_plus --seed 3
 python tools/correr_experimento.py config/experimentos/estrategias.json --procesos 8   # D, E, F × 4 estrategias × 20 seeds
+python tools/correr_experimento.py config/experimentos/terreno_g_estrategias.json --procesos 8   # G (campo real) × 4 estrategias × 20 seeds
+python tools/verificar_terreno.py                                                       # reglas R10, R12 y R13 en G desde el trace
+python tools/kml_a_mapa.py --figura                                                     # regenera config/mapas/el_pueblito.json desde el KML
 ```
 
 ---
 
 ## Resultados
+
+**Terreno real, escenario G** (detalle en [`docs/resultados_terreno.md`](docs/resultados_terreno.md)): en El Pueblito el despacho anticipado baja el ocio de las cosechadoras un 52 % (55 % con `anticipada_plus`) y el costo J un 28 %, porque los traslados desde la bodega son largos. Respetar el cultivo en pie (R13) cuesta entre 1.4 % y 2.2 % más de tiempo, y evita que los carros con despacho anticipado pasen hasta 864 m sobre maíz sin cosechar. El relieve (pendiente media de 1.5 %) sube el combustible un 1.6 % con el factor por defecto. 340 corridas; con R13, 0 colisiones, 0 salidas del predio y 0 m de carro sobre cultivo.
 
 **Segunda entrega** (detalle, IC 95 % y figuras en [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md)): en D y E, atender desde la bodega y encadenar servicios (`anticipada_plus`) baja el ocio de las cosechadoras entre 36 % y 40 % y el costo J entre 31 % y 36 %; el umbral de aviso por sí solo apenas cambia el ocio (−1 %); la capacidad del carro solo importa cuando la política la usa; y en F (combustible escaso e incertidumbre) la línea base le gana a la subasta. 640 corridas sin colisiones ni bloqueos.
 
@@ -251,6 +258,9 @@ runs/                    salidas de las corridas (no se versionan)
 
 | Documento | Para qué |
 |---|---|
+| [`docs/resultados_terreno.md`](docs/resultados_terreno.md) | Resultados del campo real (escenario G): estrategias, factor de pendiente, R13 y compactación del suelo |
+| [`docs/especificacion_terreno.md`](docs/especificacion_terreno.md) | Terreno real: KML a mapa, trace 2.3, reglas R12 y R13, relieve, zonas, escenario G y Unity |
+| [`docs/plan_terreno.md`](docs/plan_terreno.md) | Plan del terreno real (P0–P7) y mejoras siguientes (M1–M12), con su estado |
 | [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md) | Resultados de la segunda entrega: estrategias, incertidumbre, umbral, capacidad del carro, costo J, respuestas a la retro y limitaciones |
 | [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md) | Qué agrega la segunda entrega: varios agentes, obstáculos, subasta, despacho anticipado, aleatoriedad, combustible, costo J, trace 2.2 y servidor |
 | [`docs/especificacion_primera_entrega.md`](docs/especificacion_primera_entrega.md) | Qué hace el sistema: mundo, reglas, agentes, mensajes, formato del log, métricas, pruebas y contrato entre módulos |
