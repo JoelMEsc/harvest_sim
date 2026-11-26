@@ -55,7 +55,12 @@ def test_lista_de_escenarios_y_estrategias(cliente):
     assert {"escenario_a", "escenario_b", "escenario_c"} <= set(nombres)
     a = datos["escenarios"][nombres.index("escenario_a")]["parametros"]
     assert (a["ancho"], a["alto"], a["capacidad_cosechadora"], a["obstaculos"]) == (8, 7, 10, 0)
-    assert datos["estrategias"] == ["base", "subasta", "anticipada", "anticipada_plus"]
+    assert datos["estrategias"] == ["base", "subasta", "anticipada", "anticipada_plus", "qlearning", "sarsa"]
+    por_escenario = {e["nombre"]: e["estrategias"] for e in datos["escenarios"]}
+    # M1: las aprendidas solo donde hay tabla entrenada (config/aprendizaje/)
+    assert por_escenario["escenario_a"] == ["base", "subasta", "anticipada", "anticipada_plus"]
+    assert por_escenario["escenario_d"][-2:] == ["qlearning", "sarsa"]
+    assert por_escenario["escenario_g"][-2:] == ["qlearning", "sarsa"]
 
 
 def test_trace_de_un_escenario_con_estrategia_y_seed(cliente):

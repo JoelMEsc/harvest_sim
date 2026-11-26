@@ -60,3 +60,24 @@ python tools/correr_experimento.py config/experimentos/m1_despacho_incertidumbre
 - **Experimento `m1_despacho_incertidumbre.json`:** lo mismo en D con incertidumbre. Las seeds sí varían, así que el IC 95 % es real; la tabla es la de D sin incertidumbre, de modo que esto también prueba la generalización.
 
 Resultados: `docs/resultados_mejoras.md` §M1.
+
+### En el log y en Unity
+
+Para que el visor y Unity muestren el aprendizaje sin decidir nada, el trace registra cada decisión. Todo esto aparece **solo** con `politica.aviso` aprendido; las corridas con las 4 estrategias de siempre no cambian.
+
+- **Evento `DECISION_DESPACHO`** (categoría «mundo», como `RESTRICCION`; desde el trace 2.2):
+
+| Campo | Contenido |
+|---|---|
+| `agente` | La cosechadora que decide |
+| `estado` | `{tramo: 0–5, carros_libres: 0–2, distancia: 0–3, otra_pidio: bool}` |
+| `q` | `{seguir, pedir}`: los valores de la tabla en ese estado. Falta si la tabla no lo conoce. |
+| `accion` | `seguir` o `pedir` |
+| `origen` | `tabla` (la tabla prefirió esa acción), `umbral` (estado nuevo o empate: decidió la regla fija), `forzada` (la tolva se llenó sin carro: el cliff) o `exploracion` (ε, solo al entrenar) |
+
+- Cada `pedir` sale en el mismo tick que el `SOLICITUD_SERVICIO` de esa cosechadora.
+- **`config.aprendizaje`:** qué tabla decidió (`algoritmo`, `tabla` relativa a `config/`, `sha256`, `episodios`, `estados`), o `{algoritmo, entrenando: true, epsilon}` al entrenar.
+- **Métricas:** `decisiones_despacho`, `pedidos_tabla`, `pedidos_respaldo` y `cliffs_despacho`.
+- **Servidor:** `/api/escenarios` lista las 6 estrategias y, por escenario, las que puede correr. Las aprendidas solo aparecen en los escenarios con tabla (hoy D y G).
+- **`tools/exportar_traces_unity.py`:** acepta `qlearning` y `sarsa`.
+- **Tamaño:** en G con SARSA son 41 decisiones por corrida (≈5 por ciclo); el trace pesa 0.96 MB.

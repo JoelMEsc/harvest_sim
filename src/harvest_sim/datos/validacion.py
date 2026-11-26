@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from .campo import celdas_de_campo, tiene_mapa
 from .formato import (
+    ACCIONES_DESPACHO,
+    CAMPOS_ESTADO_DESPACHO,
+    COSECHADORA,
+    ORIGENES_DESPACHO,
     CAMPOS_AGENTE,
     CAMPOS_AGENTE_OBLIGATORIOS,
     CAMPOS_EVENTO,
@@ -407,6 +411,25 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
                 agente_conocido(pref, e["agente"])
                 if e["regla"] not in REGLAS_RESTRICCION:
                     aviso(f"{pref}: regla {e['regla']!r} no está en formato.REGLAS_RESTRICCION")
+
+            elif tipo == "DECISION_DESPACHO":
+                if agente_conocido(pref, e["agente"]) and catalogo[e["agente"]].get("tipo") != COSECHADORA:
+                    error(f"{pref}: solo una cosechadora decide el despacho")
+                est = e["estado"]
+                if sorted(est) != sorted(CAMPOS_ESTADO_DESPACHO) or not all(
+                        _es_entero(est[c]) for c in CAMPOS_ESTADO_DESPACHO if c != "otra_pidio") \
+                        or not isinstance(est.get("otra_pidio"), bool):
+                    error(f"{pref}: estado debe ser {{tramo, carros_libres, distancia: enteros; otra_pidio: bool}}")
+                elif not (0 <= est["tramo"] <= 5 and 0 <= est["carros_libres"] <= 2 and 0 <= est["distancia"] <= 3):
+                    error(f"{pref}: estado fuera de rango (tramo 0-5, carros_libres 0-2, distancia 0-3)")
+                if e["accion"] not in ACCIONES_DESPACHO:
+                    error(f"{pref}: accion debe ser una de {list(ACCIONES_DESPACHO)}")
+                if e["origen"] not in ORIGENES_DESPACHO:
+                    error(f"{pref}: origen debe ser uno de {list(ORIGENES_DESPACHO)}")
+                elif e["origen"] == "forzada" and (e["accion"] != "pedir" or est.get("tramo") != 5):
+                    error(f"{pref}: una decisión forzada es pedir con la tolva llena (tramo 5)")
+                if "q" in e and (sorted(e["q"]) != ["pedir", "seguir"] or not all(_es_numero(x) for x in e["q"].values())):
+                    error(f"{pref}: q debe ser {{seguir, pedir}} numéricos")
 
             elif tipo == "MENSAJE_ENVIADO":
                 agente_conocido(pref, e["de"], "de")

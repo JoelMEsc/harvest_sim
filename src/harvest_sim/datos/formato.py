@@ -33,6 +33,7 @@ CATEGORIA = {
     "BLOQUEO": 2,
     "RECARGA": 2,
     "RESTRICCION": 2,
+    "DECISION_DESPACHO": 2,
     "MENSAJE_ENVIADO": 3,
 }
 
@@ -44,6 +45,8 @@ CAMPOS_EVENTO = {
     "BLOQUEO": {"agente": str},
     "RECARGA": {"agente": str, "cantidad": float, "nivel": float},
     "RESTRICCION": {"agente": str, "regla": str, "detalle": str},
+    # M1 (docs/especificacion_mejoras.md): una decisión de la tabla aprendida; solo con politica.aviso aprendido.
+    "DECISION_DESPACHO": {"agente": str, "estado": dict, "accion": str, "origen": str},
     "MENSAJE_ENVIADO": {"id": int, "tipo_mensaje": str, "performativa": str, "de": str, "a": str,
                         "payload": dict, "entrega_en": int},
     "MENSAJE_ENTREGADO": {"id": int, "a": str},
@@ -52,8 +55,14 @@ CAMPOS_EVENTO = {
 # esa celda; si falta, vale el rendimiento de `mundo.rendimiento` o `grano_por_celda`.
 CAMPOS_EVENTO_OPCIONALES = {
     "CELDA_COSECHADA": {"cantidad": int},
+    # Valores de la tabla en ese estado; falta si la tabla no lo conoce (decide el umbral de respaldo).
+    "DECISION_DESPACHO": {"q": dict},
 }
-EVENTOS_DESDE = {"RECARGA": "2.2", "RESTRICCION": "2.2"}
+EVENTOS_DESDE = {"RECARGA": "2.2", "RESTRICCION": "2.2", "DECISION_DESPACHO": "2.2"}
+# DECISION_DESPACHO: claves de `estado`, acciones y de dónde salió la decisión.
+CAMPOS_ESTADO_DESPACHO = ("tramo", "carros_libres", "distancia", "otra_pidio")
+ACCIONES_DESPACHO = ("seguir", "pedir")
+ORIGENES_DESPACHO = ("tabla", "umbral", "forzada", "exploracion")
 
 # --- Tipos de agente -----------------------------------------------------------------------------
 COSECHADORA = "cosechadora"

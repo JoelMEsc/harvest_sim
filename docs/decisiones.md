@@ -271,3 +271,18 @@ Formato por entrada:
   - Aprender durante la evaluación rompe la reproducibilidad: la seed dejaría de determinar el trace.
   - Cruzar el cultivo rompe el espíritu de R13 por una falla de coordinación.
 - **Afecta a:** Oswaldo (`carro._acompanar`), Emilio (`cosechadora.celdas_de_paso`), Ilan (prueba de regresión en `test_terreno_integracion.py`). Detalle en `docs/especificacion_mejoras.md` §M1.
+
+## 2026-11-26 — M1 en Unity: cada decisión del despacho aprendido queda en el log
+- **Estado:** DECIDIDO.
+- **Quién:** Joel (Datos), con la vista de Unity (Mario Giovanni).
+- **Decisión:**
+  1. Evento nuevo `DECISION_DESPACHO` (estado, valores Q, acción y origen), solo con `politica.aviso` aprendido.
+  2. `config.aprendizaje` guarda qué tabla decidió (ruta y sha256).
+  3. Métricas `decisiones_despacho`, `pedidos_tabla`, `pedidos_respaldo` y `cliffs_despacho`.
+  4. El servidor lista por escenario las estrategias que puede correr.
+  5. Unity muestra la decisión en la placa y en la tarjeta del agente.
+- **Alternativa considerada:** meter la decisión en el payload del `SOLICITUD_SERVICIO`; que Unity cargara la tabla y recalculara la decisión.
+- **Por qué se descartó:**
+  - El payload solo existe cuando se pide, y la mitad de lo que aprende el agente son las veces que decide seguir, además del cliff.
+  - Recalcular en Unity rompe la regla de que Unity solo lee el trace (habría dos fuentes de verdad).
+- **Afecta a:** Mario Giovanni (Unity: el cargador acepta el evento nuevo; un Unity anterior rechaza los traces de `qlearning` y `sarsa`) e Ilan (pruebas). Detalle en `docs/especificacion_mejoras.md` §M1.

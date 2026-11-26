@@ -568,6 +568,12 @@ class Mundo:
             "detalle": detalle,
         })
 
+    def registrar_decision(self, evento: dict) -> None:
+        """M1: una decisión del despacho aprendido (evento DECISION_DESPACHO; la arma aprendizaje.py)."""
+        if evento.get("agente") not in self._agentes:
+            raise ValueError(f"agente no registrado: {evento.get('agente')}")
+        self._eventos.append({"tipo": "DECISION_DESPACHO", **evento})
+
     def drenar_eventos(self) -> list[dict]:
         """Entrega los eventos acumulados y vacía la lista interna."""
         eventos = self._eventos

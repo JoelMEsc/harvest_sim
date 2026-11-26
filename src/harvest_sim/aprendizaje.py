@@ -96,15 +96,30 @@ class Despachador:
     def valores(self, k: str) -> list[float]:
         return self.q.setdefault(k, [0.0, 0.0])
 
-    def _elegir(self, k: str, umbral: bool) -> int:
+    def _elegir(self, k: str, umbral: bool) -> tuple[int, str]:
+        """(acción, origen): origen = "exploracion" (ε al entrenar), "umbral" (estado nuevo o empate: decide la
+        regla fija) o "tabla"."""
         if self.aprender and self.azar.random() < self.parametros["epsilon"]:
-            return self.azar.randrange(2)
+            return self.azar.randrange(2), "exploracion"
         q = self.q.get(k)
         if q is None or q[SEGUIR] == q[PEDIR]:
             if not self.aprender:
                 self.respaldo_umbral += 1
-            return PEDIR if umbral else SEGUIR
-        return PEDIR if q[PEDIR] > q[SEGUIR] else SEGUIR
+            return (PEDIR if umbral else SEGUIR), "umbral"
+        return (PEDIR if q[PEDIR] > q[SEGUIR] else SEGUIR), "tabla"
+
+    def _registrar(self, mundo, agente: str, estado: tuple, accion: int, origen: str, q: list[float] | None) -> None:
+        """Deja la decisión en el log (evento DECISION_DESPACHO) para que el visor y Unity la muestren."""
+        registrar = getattr(mundo, "registrar_decision", None)
+        if not callable(registrar):
+            return
+        tramo, libres, distancia, otra = estado
+        evento = {"agente": agente, "estado": {"tramo": tramo, "carros_libres": libres, "distancia": distancia,
+                                                "otra_pidio": bool(otra)},
+                  "accion": ACCIONES[accion], "origen": origen}
+        if q is not None:
+            evento["q"] = {"seguir": round(q[SEGUIR], 4), "pedir": round(q[PEDIR], 4)}
+        registrar(evento)
 
     def decidir(self, cosechadora, mundo, umbral: bool) -> bool:
         """True si la cosechadora debe pedir carro ahora. `umbral`: lo que haría la regla fija.
@@ -117,7 +132,8 @@ class Despachador:
             return False
         self._tramo[cosechadora.agent_id] = estado[0]
         k = clave(estado)
-        accion = self._elegir(k, umbral)
+        accion, origen = self._elegir(k, umbral)
+        self._registrar(mundo, cosechadora.agent_id, estado, accion, origen, self.q.get(k))
         self._transicion(cosechadora.agent_id, k, accion)
         if accion == PEDIR:
             self.recompensar(cosechadora.agent_id, -self.parametros["costo_solicitud"])
@@ -129,7 +145,9 @@ class Despachador:
         """La tolva se llenó sin carro en camino: cliff y llamada obligatoria."""
         self.cliffs += 1
         self.recompensar(cosechadora.agent_id, -self.parametros["castigo_cliff"])
-        k = clave(estado_de(cosechadora, mundo, llena=True))
+        estado = estado_de(cosechadora, mundo, llena=True)
+        k = clave(estado)
+        self._registrar(mundo, cosechadora.agent_id, estado, PEDIR, "forzada", self.q.get(k))
         self._tramo[cosechadora.agent_id] = None
         self._transicion(cosechadora.agent_id, k, PEDIR, forzada=True)
         self.recompensar(cosechadora.agent_id, -self.parametros["costo_solicitud"])
@@ -191,7 +209,22 @@ class Despachador:
     @classmethod
     def cargar(cls, ruta: str | Path, aprender: bool = False, semilla: int = 0) -> "Despachador":
         datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
-        return cls(datos["algoritmo"], datos["parametros"], aprender, semilla, datos["estados"])
+        despachador = cls(datos["algoritmo"], datos["parametros"], aprender, semilla, datos["estados"])
+        ruta = Path(ruta)
+        try:
+            nombre = ruta.resolve().relative_to(CARPETA_TABLAS.parent).as_posix()
+        except ValueError:
+            nombre = ruta.name
+        despachador.procedencia = {"algoritmo": datos["algoritmo"], "tabla": nombre, "sha256": sha256_de(ruta),
+                                   "episodios": datos.get("episodios"), "estados": len(datos["estados"])}
+        return despachador
+
+    def descripcion(self) -> dict:
+        """Lo que se anota en `config.aprendizaje` del trace: qué tabla decidió (o que se está entrenando)."""
+        if self.aprender:
+            return {"algoritmo": self.algoritmo, "entrenando": True, "epsilon": self.parametros["epsilon"]}
+        return dict(getattr(self, "procedencia", None) or {"algoritmo": self.algoritmo, "tabla": None,
+                                                            "estados": len(self.q)})
 
 
 def ruta_tabla(politica: dict, nombre_escenario: str) -> Path:
