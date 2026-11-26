@@ -1,0 +1,16 @@
+{
+  "kml": "el_pueblito.kml",
+  "salida": "el_pueblito.json",
+  "parametros": {
+    "tamano_celda_m": 12.0,
+    "tolerancia_union_m": 5.0,
+    "ancho_camino_m": 4.0,
+    "margen_obstaculo_m": 3.0,
+    "fraccion_campo": 0.5,
+    "n_bases": 8,
+    "margen_celdas": 1,
+    "tolerancia_area": 0.05,
+    "radio_poste_m": 0.5
+  },
+  "dem": null
+}
