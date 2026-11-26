@@ -1,4 +1,4 @@
-"""Formato del trace 2.2 y vocabulario compartido (estados, mensajes y clases de la ontología).  [Joel]
+"""Formato del trace (2.1, 2.2 y 2.3) y vocabulario compartido (estados, mensajes y clases de la ontología).  [Joel]
 
 Es el único lugar donde se escriben estos nombres: las métricas, las gráficas, el validador y el resto
 del equipo los importan desde aquí (`from harvest_sim.datos.formato import LLENA_ESPERANDO, ...`).
@@ -6,8 +6,13 @@ del equipo los importan desde aquí (`from harvest_sim.datos.formato import LLEN
 
 from __future__ import annotations
 
-SCHEMA_VERSION = "2.2"
-VERSIONES_ACEPTADAS = ("2.1", "2.2")  # el validador acepta ambas; 2.2 solo agrega campos
+SCHEMA_VERSION = "2.2"         # la que se escribe sin mapa (escenarios A-F)
+SCHEMA_VERSION_MAPA = "2.3"    # la que se escribe cuando el mundo trae mapa (forma real, caminos, relieve)
+VERSIONES_ACEPTADAS = ("2.1", "2.2", "2.3")  # cada versión solo agrega campos a la anterior
+
+# Campos opcionales de `mundo` que agrega el 2.3 (docs/especificacion_terreno.md §6). Si el mundo trae
+# alguno, el trace es 2.3 y el campo cosechable sigue la regla del mapa (datos/campo.py).
+CAMPOS_MUNDO_23 = ("tamano_celda_m", "caminos", "fuera_de_campo", "lotes", "altura_m", "geo")
 
 # Claves del primer nivel y de cada tick, en este orden.
 CLAVES_TRACE = ["schema_version", "meta", "config", "mundo", "agentes", "ticks", "metricas"]
@@ -112,7 +117,10 @@ R4_INTERCAMBIO = "R4_intercambio"
 R9_BODEGA = "R9_bodega"
 R10_OBSTACULO = "R10_obstaculo"
 COMBUSTIBLE_RESERVA = "combustible_reserva"
-REGLAS_RESTRICCION = (R3_CELDA_OCUPADA, R4_INTERCAMBIO, R9_BODEGA, R10_OBSTACULO, COMBUSTIBLE_RESERVA)
+R12_FUERA_DE_CAMPO = "R12_fuera_de_campo"    # 2.3: nadie sale del predio
+R13_CULTIVO_EN_PIE = "R13_cultivo_en_pie"    # 2.3: los carros no pisan el cultivo sin cosechar
+REGLAS_RESTRICCION = (R3_CELDA_OCUPADA, R4_INTERCAMBIO, R9_BODEGA, R10_OBSTACULO, COMBUSTIBLE_RESERVA,
+                      R12_FUERA_DE_CAMPO, R13_CULTIVO_EN_PIE)
 
 # --- Clases de la ontología del curso (docs/ontologia.md) ----------------------------------------
 CLASE_REGISTRO = "AccountabilityRecord"         # meta.clase: el trace es un registro verificable

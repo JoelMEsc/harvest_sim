@@ -234,3 +234,19 @@ Formato por entrada:
 - **Por qué se descartó:** rompe «un cfp por servicio»; con tanques chicos la cosechadora nunca saldría; los consumidores del log lo rechazarían; ciclo infinito de subastas.
 - **Limitación conocida:** en F todavía hay unos pocos ticks con un tanque en 0 L (9 en unos 40,000 ticks, al esperar mucho a un carro ya en camino). R11 se cumple (nunca negativo) y queda un aviso en el log de consola.
 - **Afecta a:** Oswaldo (regla 8), Ilan (pruebas de integración de D, E y F), Joel (experimentos).
+
+## 2026-11-25 — Terreno realista: la forma del campo entra por Python (trace 2.3)
+- **Estado:** DECIDIDO.
+- **Quién:** Joel (Datos), con base en el KML y las convenciones de Oswaldo (`harvest-simu-visualization/docs/cultivo/`).
+- **Decisión:**
+  1. El KML de El Pueblito se convierte **en Python** en un mapa de celdas (`config/mapas/el_pueblito.json`). La simulación corre sobre ese mapa y Unity lo recibe en el **trace 2.3** (`tamano_celda_m`, `caminos`, `fuera_de_campo`, `lotes`, `altura_m` y `geo`).
+  2. Unity dibuja con `geo.formas` (y reutiliza el código de mallas de `CultivoDesdeKML.cs`), pero no calcula pasadas.
+  3. La cuadrícula se gira con el rumbo común de los surcos, así que una fila es una pasada. Las celdas son de 12 m, como en la vista realista.
+  4. Los caminos trazados en segmentos se **sueldan** con una tolerancia de 5 m, y cada unión queda en un reporte. Lo que siga suelto es un error del KML.
+  5. Reglas nuevas: **R12** (nadie sale del predio) y **R13** (los carros no pisan el cultivo en pie). R13 solo aplica con mapa y `politica.respetar_cultivo`.
+  6. La bodega y las bases van en un **patio** junto al camino, no sobre él.
+  7. Con mapa, el campo se reparte por lotes completos entre las cosechadoras, y cada lote empieza por la orilla que toca un camino.
+  8. El trace es 2.3 solo si hay mapa: A–F siguen siendo 2.2 y dan las mismas métricas.
+- **Alternativa considerada:** que Unity calcule las pasadas con `PasadasCultivo.cs`; un rectángulo con el área del predio; caminos rasterizados por área; la bodega sobre el camino.
+- **Por qué se descartó:** habría dos fuentes de verdad; se perdería la forma, que es justo lo que se quiere estudiar; un camino de 4 m nunca ocupa la mitad de una celda de 12 m y la red quedaría partida; una máquina estacionada sobre un camino de una celda lo tapa para siempre.
+- **Afecta a:** todos. Detalle en `docs/especificacion_terreno.md`.

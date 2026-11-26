@@ -24,8 +24,8 @@ class Reproductor:
     """Conserva el estado entre ticks dispersos; retroceder reconstruye desde 0."""
 
     def __init__(self, trace):
-        if trace.get("schema_version") not in ("2.1", "2.2"):
-            raise ValueError("se requiere un trace con schema_version 2.1 o 2.2")
+        if trace.get("schema_version") not in ("2.1", "2.2", "2.3"):
+            raise ValueError("se requiere un trace con schema_version 2.1, 2.2 o 2.3")
         self.trace = trace
         self.total = trace["meta"]["total_ticks"]
         if type(self.total) is not int or self.total < 0:
