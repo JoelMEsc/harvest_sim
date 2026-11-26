@@ -9,7 +9,8 @@ Arrancar:
 
 Rutas:
     GET  /api/salud
-    GET  /api/escenarios                                       # escenarios de config/ y estrategias
+    GET  /api/escenarios                                       # escenarios de config/ y estrategias (por escenario,
+                                                               # las aprendidas solo si tienen tabla entrenada)
     GET  /api/escenarios/{nombre}/trace?seed=0&estrategia=base
     POST /api/simulaciones   {"config": {...}}  o  {"escenario", "estrategia", "seed", "cambios"}
 
@@ -29,7 +30,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .datos.experimentos import ESTRATEGIAS, aplicar_estrategia, simulador_real
+from .aprendizaje import ruta_tabla
+from .datos.experimentos import ESTRATEGIAS, ESTRATEGIAS_APRENDIDAS, aplicar_estrategia, simulador_real
 from .datos.formato import SCHEMA_VERSION
 from .datos.validacion import validar_trace
 
@@ -122,10 +124,19 @@ def crear_app(simulador: Callable[[dict], dict] | None = None, carpeta_config: s
     def salud() -> dict:
         return {"estado": "ok", "schema_version": SCHEMA_VERSION, "simulador": nombre_simulador or "personalizado"}
 
+    def estrategias_de(nombre: str, config: dict) -> list[str]:
+        """Las 4 de coordinación siempre; las aprendidas (M1) solo si el escenario tiene su tabla entrenada."""
+        politica = config.get("politica") or {}
+        aprendidas = [e for e in ESTRATEGIAS_APRENDIDAS
+                      if ruta_tabla({**politica, "aviso": e, "qtabla": None}, config.get("nombre", nombre)).is_file()]
+        return list(ESTRATEGIAS) + aprendidas
+
     @app.get("/api/escenarios")
     def listar() -> dict:
-        return {"escenarios": [{"nombre": n, "parametros": _parametros(c)} for n, c in escenarios().items()],
-                "estrategias": list(ESTRATEGIAS)}
+        todos = escenarios()
+        return {"escenarios": [{"nombre": n, "parametros": _parametros(c), "estrategias": estrategias_de(n, c)}
+                               for n, c in todos.items()],
+                "estrategias": list(ESTRATEGIAS) + list(ESTRATEGIAS_APRENDIDAS)}
 
     @app.get("/api/escenarios/{nombre}/trace")
     def trace_de_escenario(nombre: str, seed: int | None = Query(default=None, ge=0),

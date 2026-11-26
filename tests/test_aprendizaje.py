@@ -179,3 +179,98 @@ def test_entrenar_evaluar_y_reproducir(tmp_path):
     assert validar_trace(a) == [] and a["metricas"]["porcentaje_entregado"] == 100.0
     assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
     assert a["config"]["politica"]["aviso"] == "qlearning"
+
+
+# --- M1 en el log y en Unity: evento DECISION_DESPACHO, procedencia de la tabla y métricas -------------------
+
+def _corrida(estrategia, escenario="escenario_d", seed=0):
+    logging.disable(logging.WARNING)
+    base = json.loads((RAIZ / "config" / f"{escenario}.json").read_text(encoding="utf-8"))
+    trace = simulador_real({**aplicar_estrategia(base, estrategia), "seed": seed})
+    logging.disable(logging.NOTSET)
+    return trace
+
+
+def _decisiones(trace):
+    return [e for t in trace["ticks"] for e in t["cambios"] if e["tipo"] == "DECISION_DESPACHO"]
+
+
+@pytest.fixture(scope="module")
+def corrida_sarsa_d():
+    return _corrida("sarsa")
+
+
+def test_el_log_trae_cada_decision_con_su_estado_y_valores(corrida_sarsa_d):
+    t = corrida_sarsa_d
+    assert validar_trace(t) == []
+    ds = _decisiones(t)
+    assert ds and all(d["agente"].startswith("cosechadora_") for d in ds)
+    assert {d["origen"] for d in ds} <= {"tabla", "umbral", "forzada"}  # sin exploración al evaluar
+    assert all(set(d["estado"]) == {"tramo", "carros_libres", "distancia", "otra_pidio"} for d in ds)
+    for d in ds:
+        if d["origen"] == "tabla":
+            preferida = "pedir" if d["q"]["pedir"] > d["q"]["seguir"] else "seguir"
+            assert d["accion"] == preferida  # la acción es la que la tabla prefiere
+    m = t["metricas"]
+    assert m["decisiones_despacho"] == len(ds)
+    assert m["pedidos_tabla"] == sum(1 for d in ds if d["accion"] == "pedir" and d["origen"] == "tabla")
+    assert m["cliffs_despacho"] == sum(1 for d in ds if d["origen"] == "forzada")
+
+
+def test_cada_llamada_tiene_su_decision(corrida_sarsa_d):
+    """Cada cfp que abre un servicio sale en el mismo tick que una decisión de pedir de esa cosechadora."""
+    t = corrida_sarsa_d
+    for tick in t["ticks"]:
+        pedidos = {e["agente"] for e in tick["cambios"] if e["tipo"] == "DECISION_DESPACHO" and e["accion"] == "pedir"}
+        for e in tick["cambios"]:
+            if e["tipo"] == "DECISION_DESPACHO" and e["accion"] == "pedir":
+                assert any(m["tipo"] == "MENSAJE_ENVIADO" and m["tipo_mensaje"] == "SOLICITUD_SERVICIO"
+                           and m["de"] == e["agente"] for m in tick["cambios"]), tick["tick"]
+        assert pedidos <= {e["de"] for e in tick["cambios"] if e["tipo"] == "MENSAJE_ENVIADO"}
+
+
+def test_la_config_dice_que_tabla_decidio(corrida_sarsa_d):
+    a = corrida_sarsa_d["config"]["aprendizaje"]
+    ruta = RAIZ / "config" / a["tabla"]
+    assert a["algoritmo"] == "sarsa" and ruta.is_file()
+    import hashlib
+    assert a["sha256"] == hashlib.sha256(ruta.read_bytes()).hexdigest()
+    assert a["estados"] == len(json.loads(ruta.read_text())["estados"])
+
+
+def test_sin_aviso_aprendido_el_log_no_cambia():
+    t = _corrida("anticipada")
+    assert not _decisiones(t) and "aprendizaje" not in t["config"] and "decisiones_despacho" not in t["metricas"]
+
+
+def test_al_entrenar_se_marca_la_exploracion(tmp_path):
+    from harvest_sim.simulacion import ejecutar
+    base = json.loads((RAIZ / "config" / "escenario_d.json").read_text(encoding="utf-8"))
+    ruta = tmp_path / "d.json"
+    ruta.write_text(json.dumps({**aplicar_estrategia(base, "qlearning"), "seed": 1000}), encoding="utf-8")
+    logging.disable(logging.WARNING)
+    t = ejecutar(cargar_config(ruta), Despachador("qlearning", {"epsilon": 0.5}, aprender=True, semilla=3))
+    logging.disable(logging.NOTSET)
+    assert validar_trace(t) == []
+    assert "exploracion" in {d["origen"] for d in _decisiones(t)}
+    assert t["config"]["aprendizaje"]["entrenando"] is True
+
+
+@pytest.mark.parametrize("cambio,patron", [
+    ({"accion": "esperar"}, "accion"),
+    ({"origen": "intuicion"}, "origen"),
+    ({"estado": {"tramo": 9, "carros_libres": 0, "distancia": 0, "otra_pidio": False}}, "fuera de rango"),
+    ({"estado": {"tramo": 1}}, "estado debe ser"),
+    ({"q": {"seguir": "alto", "pedir": 1}}, "q debe ser"),
+    ({"origen": "forzada", "accion": "seguir"}, "forzada"),
+    ({"agente": "carro_1"}, "solo una cosechadora"),
+])
+def test_el_validador_rechaza_decisiones_mal_formadas(corrida_sarsa_d, cambio, patron):
+    import copy
+    from harvest_sim.datos.trace import calcular_checksum
+    t = copy.deepcopy(corrida_sarsa_d)
+    tick = next(tk for tk in t["ticks"] if any(e["tipo"] == "DECISION_DESPACHO" for e in tk["cambios"]))
+    evento = next(e for e in tick["cambios"] if e["tipo"] == "DECISION_DESPACHO")
+    evento.update(cambio)
+    tick["checksum"] = calcular_checksum(tick)
+    assert any(patron in e for e in validar_trace(t))

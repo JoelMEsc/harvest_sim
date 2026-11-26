@@ -24,7 +24,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))  # permite correrlo sin instalar el paquete (pip install -e .)
 
 from harvest_sim.datos import escribir_trace, validar_trace  # noqa: E402
-from harvest_sim.datos.experimentos import ESTRATEGIAS, aplicar_estrategia, simulador_real  # noqa: E402
+from harvest_sim.datos.experimentos import TODAS_LAS_ESTRATEGIAS, aplicar_estrategia, simulador_real  # noqa: E402
 
 
 def _cargar_script(ruta: Path):
@@ -76,7 +76,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Exporta traces validados al proyecto de Unity.")
     parser.add_argument("destino", help="carpeta destino (por ejemplo Assets/Data/Traces del repo de Unity)")
     parser.add_argument("--escenarios", nargs="+", help="nombres de config/escenario_*.json (default: todos)")
-    parser.add_argument("--estrategias", nargs="+", choices=list(ESTRATEGIAS), help="default: base")
+    parser.add_argument("--estrategias", nargs="+", choices=list(TODAS_LAS_ESTRATEGIAS),
+                        help="default: base; qlearning y sarsa necesitan la tabla del escenario (config/aprendizaje/)")
     parser.add_argument("--seed", type=int, help="sobrescribe la seed de cada escenario")
     parser.add_argument("--ejemplo", action="store_true", help="exporta los traces de ejemplo (sin simulación)")
     args = parser.parse_args(argv)

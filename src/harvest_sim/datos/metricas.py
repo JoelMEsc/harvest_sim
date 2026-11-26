@@ -141,6 +141,9 @@ def calcular_metricas(fuente) -> dict:
       transferir).
     - costo: {"pesos", "terminos": {nombre: peso · valor}, "total"} y costo_total (J, especificación §11).
     - por_agente: {agent_id: {...}} con el detalle de cada agente (incluye ticks_por_estado y espera_por_ciclo).
+    Despacho aprendido (solo si el log trae eventos DECISION_DESPACHO; docs/especificacion_mejoras.md §M1):
+    - decisiones_despacho (total), pedidos_tabla (pidió porque la tabla lo prefería), pedidos_respaldo (pidió
+      por el umbral, en un estado que la tabla no conoce) y cliffs_despacho (la tolva se llenó sin carro).
     Terreno real (solo si el mundo trae mapa, trace 2.3; docs/especificacion_terreno.md §13):
     - metros_carro_camino, metros_carro_rastrojo, metros_carro_cultivo (totales de los carros) y
       porcentaje_carro_rastrojo: compactación del suelo (ver `suelo_de_carros`).
@@ -162,6 +165,7 @@ def calcular_metricas(fuente) -> dict:
     propuestas = 0
     rechazos_por_motivo: dict[str, int] = {}
     ganados: dict[str, int] = {}
+    decisiones: dict[tuple[str, str], int] = {}  # (accion, origen) -> n (M1, DECISION_DESPACHO)
     for t in linea.ticks:
         for ev in linea.eventos[t]:
             if ev["tipo"] == "BLOQUEO":
@@ -169,6 +173,9 @@ def calcular_metricas(fuente) -> dict:
             elif ev["tipo"] == "RESTRICCION":
                 restricciones_por_agente[ev["agente"]] = restricciones_por_agente.get(ev["agente"], 0) + 1
                 restricciones_por_regla[ev["regla"]] = restricciones_por_regla.get(ev["regla"], 0) + 1
+            elif ev["tipo"] == "DECISION_DESPACHO":
+                par = (ev["accion"], ev["origen"])
+                decisiones[par] = decisiones.get(par, 0) + 1
             elif ev["tipo"] == "RECARGA":
                 recargado[ev["agente"]] = recargado.get(ev["agente"], 0) + ev["cantidad"]
                 recargas_por_agente[ev["agente"]] = recargas_por_agente.get(ev["agente"], 0) + 1
@@ -280,6 +287,13 @@ def calcular_metricas(fuente) -> dict:
     }
     if tiene_mapa(linea.mundo):
         metricas.update(suelo_de_carros(linea))
+    if decisiones:
+        metricas.update(
+            decisiones_despacho=sum(decisiones.values()),
+            pedidos_tabla=decisiones.get(("pedir", "tabla"), 0),
+            pedidos_respaldo=decisiones.get(("pedir", "umbral"), 0),
+            cliffs_despacho=decisiones.get(("pedir", "forzada"), 0),
+        )
     metricas["costo"] = costo_j(metricas, linea.config)
     metricas["costo_total"] = metricas["costo"]["total"]
     metricas["por_agente"] = por_agente

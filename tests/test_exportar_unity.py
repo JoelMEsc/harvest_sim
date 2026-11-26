@@ -38,3 +38,16 @@ def test_cli_con_ejemplos(tmp_path, capsys):
     assert (tmp_path / "ejemplo_22.json").read_bytes() == (RAIZ / "tests/fixtures/trace_ejemplo_22.json").read_bytes()
     assert len(list((tmp_path / "ejemplos_1x1").glob("*/trace.json"))) == 3
     assert "ejemplo_22.json" in capsys.readouterr().out
+
+
+def test_exporta_estrategias_aprendidas_con_sus_decisiones(tmp_path):
+    """M1 en Unity: qlearning y sarsa se exportan con la simulación real (D tiene tabla) y traen DECISION_DESPACHO."""
+    import logging
+    logging.disable(logging.WARNING)
+    rutas = EXPORTAR.exportar(tmp_path, ["escenario_d"], ["sarsa"], seed=0)
+    logging.disable(logging.NOTSET)
+    assert [r.name for r in rutas] == ["escenario_d__sarsa__seed0.json"]
+    trace = cargar_trace(rutas[0])
+    assert validar_trace(trace) == []
+    assert any(e["tipo"] == "DECISION_DESPACHO" for t in trace["ticks"] for e in t["cambios"])
+    assert EXPORTAR.main([str(tmp_path), "--escenarios", "escenario_d", "--estrategias", "qlearning", "--seed", "0"]) == 0
