@@ -42,6 +42,9 @@ COMBUSTIBLE_POR_DEFECTO = {
     "consumo_por_tick_encendido": 0.5,
     "reserva": 0.15,
     "tasa_recarga": 0,
+    # Consumo extra al subir (docs/especificacion_terreno.md §8): por celda, × (1 + f · pendiente_% / 100).
+    # 0 = sin efecto (A-F no cambian). Solo aplica si el mapa trae altura_m.
+    "factor_pendiente": 0.0,
 }
 COSTO_POR_DEFECTO = {"pesos": dict(PESOS_COSTO)}
 
@@ -188,6 +191,8 @@ def _validar_secciones(datos: dict) -> None:
             raise ValueError(f"config: combustible.{clave} debe ser un número > 0")
     if not _es_numero(comb["reserva"]) or not 0 <= comb["reserva"] < 1:
         raise ValueError("config: combustible.reserva debe estar en [0, 1)")
+    if not _es_numero(comb["factor_pendiente"]) or comb["factor_pendiente"] < 0:
+        raise ValueError("config: combustible.factor_pendiente debe ser un número >= 0")
     if not _es_numero(comb["tasa_recarga"]) or comb["tasa_recarga"] < 0:
         raise ValueError("config: combustible.tasa_recarga debe ser un número >= 0")
 

@@ -485,7 +485,25 @@ class Mundo:
         return (celdas * comb[f"consumo_por_celda_{self._tipo(agent_id)}"]
                 + ticks_encendido * comb["consumo_por_tick_encendido"])
 
-    def actualizar_combustible(self, agente, se_movio: bool) -> None:
+    def altura(self, celda: Celda) -> float | None:
+        """Altura de la celda en metros (relieve del mapa) o None si el mundo no tiene relieve."""
+        alturas = (self.mapa or {}).get("altura_m")
+        if alturas is None:
+            return None
+        return alturas[celda[1]][celda[0]]
+
+    def factor_pendiente(self, desde: Celda | None, hasta: Celda) -> float:
+        """Multiplicador del consumo por celda al moverse de `desde` a `hasta`: 1 + f · pendiente_% / 100 al
+        subir, 1 al bajar o en plano (docs/especificacion_terreno.md §8). 1 sin relieve o con f = 0."""
+        f = self.config.combustible.get("factor_pendiente", 0.0)
+        if not f or desde is None or self.tamano_celda_m is None:
+            return 1.0
+        h0, h1 = self.altura(desde), self.altura(hasta)
+        if h0 is None or h1 is None or h1 <= h0:
+            return 1.0
+        return 1.0 + f * (h1 - h0) / self.tamano_celda_m
+
+    def actualizar_combustible(self, agente, se_movio: bool, desde: Celda | None = None) -> None:
         """Después del paso de cada agente (§9): consumo por celda o por tick encendido y recarga en su
         base con el motor apagado. Nunca negativo (R11)."""
         if getattr(agente, "combustible", None) is None:
@@ -493,7 +511,8 @@ class Mundo:
         comb = self.config.combustible
         estado = _texto(agente.estado)
         if se_movio:
-            gasto = comb[f"consumo_por_celda_{self._tipo(agente.agent_id)}"]
+            gasto = comb[f"consumo_por_celda_{self._tipo(agente.agent_id)}"] * \
+                self.factor_pendiente(desde, agente.posicion)
         elif estado not in APAGADO:
             gasto = comb["consumo_por_tick_encendido"]
         else:
