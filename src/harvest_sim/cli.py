@@ -19,7 +19,7 @@ from .simulacion import ejecutar
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Simulación de cosecha (línea base reactiva).")
+    parser = argparse.ArgumentParser(description="Simulación de cosecha multiagente (escenarios A–G; G es el campo real de El Pueblito).")
     parser.add_argument("config", help="ruta al JSON del escenario, p. ej. config/escenario_a.json")
     parser.add_argument("--salida", default="runs", help="carpeta base de salidas (default: runs)")
     parser.add_argument("--sin-plots", action="store_true", help="no generar gráficas")

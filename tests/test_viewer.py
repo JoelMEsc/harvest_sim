@@ -293,3 +293,26 @@ def test_cli_rechaza_seed_negativa_y_estrategia_sin_contrato(cli_preparada, monk
     monkeypatch.setattr(experimentos, "ESTRATEGIAS", m2, raising=False)
     assert cli.main(["config.json", "--salida", str(tmp_path), "--estrategia", "subasta"]) == 1
     assert "politica" in capsys.readouterr().err
+
+
+def test_visor_23_dibuja_caminos_y_fuera_del_predio(viewer):
+    """Con mapa (2.3) los caminos van en color de terracería, lo de fuera del predio queda casi blanco y la
+    fila 0 ya no es de servicio."""
+    trace = json.loads((RAIZ / "tests" / "fixtures" / "trace_ejemplo_23.json").read_text(encoding="utf-8"))
+    mundo = trace["mundo"]
+    rep = viewer.Reproductor(trace)
+    superficie = viewer.dibujar(rep)
+    celda = max(2, min(58, 650 // max(mundo["ancho"], mundo["alto"])))
+
+    def color(pos):
+        return superficie.get_at((28 + pos[0] * celda + celda // 3, 120 + pos[1] * celda + celda // 3))
+
+    especiales = {tuple(mundo["bodega"])} | {tuple(b) for b in mundo["bases"].values()}
+    camino = next(tuple(c) for c in mundo["caminos"] if tuple(c) not in especiales)
+    assert color(camino) == viewer.pygame.Color(viewer.CAMINO)
+    assert color(tuple(mundo["fuera_de_campo"][0])) == viewer.pygame.Color(viewer.FUERA)
+    campo_fila_0 = [(x, 0) for x in range(mundo["ancho"])
+                    if (x, 0) not in {tuple(c) for c in mundo["caminos"] + mundo["fuera_de_campo"] + mundo["obstaculos"]}
+                    and (x, 0) not in especiales]
+    for pos in campo_fila_0:
+        assert color(pos) != viewer.pygame.Color(viewer.SERVICIO)

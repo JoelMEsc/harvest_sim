@@ -132,7 +132,9 @@ def main(argv=None) -> int:
                                                     carpeta / f"sensibilidad_{parametros[0]}.png"))
     if args.simulador == "ejemplo":
         print("aviso: se usó el generador de ejemplo; los números no son resultados de la simulación")
-    print(f"{len(filas)} corridas ({resumen[0]['variacion'] if resumen else 'sin filas'})")
+    con_variacion = sum(1 for g in resumen if g["variacion"] == "con variación")
+    print(f"{len(filas)} corridas; {con_variacion} de {len(resumen)} grupos con variación entre seeds"
+          if resumen else f"{len(filas)} corridas (sin filas)")
     for g in generados:
         print(g)
     return 0

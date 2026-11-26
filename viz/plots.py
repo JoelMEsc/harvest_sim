@@ -683,6 +683,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Genera las gráficas y la tabla resumen a partir de trace.json.")
     parser.add_argument("trace", nargs="+", help="uno o más trace.json (la comparación y la tabla juntan varios)")
     parser.add_argument("--salida", help="carpeta de salida (por defecto, junto a cada trace y en <runs>/comparacion)")
+    parser.add_argument("--sin-comparacion", action="store_true",
+                        help="solo las gráficas de cada trace (p. ej. G, cuya escala no cabe junto a A–F)")
     parser.add_argument("--agente", help="id de una cosechadora: las gráficas 2 y 3 muestran solo esa (no el promedio)")
     args = parser.parse_args(argv)
 
@@ -698,6 +700,10 @@ def main(argv=None):
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    if args.sin_comparacion:
+        for g in generados:
+            print(g)
+        return 0
     if args.salida:
         comparacion = Path(args.salida) / "comparacion"
     else:
