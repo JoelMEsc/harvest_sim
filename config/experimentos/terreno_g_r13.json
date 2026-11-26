@@ -1,0 +1,9 @@
+{
+  "nombre": "terreno_g_r13",
+  "descripcion": "Terreno real (P7): G con R13 (los carros no pisan el cultivo en pie) contra G sin R13, con las 4 estrategias y 20 seeds: cuánto más tardan los carros y cuánto suelo se deja de compactar.",
+  "escenarios": ["config/escenario_g.json"],
+  "estrategias": ["base", "subasta", "anticipada", "anticipada_plus"],
+  "barrido": {"politica.respetar_cultivo": [true, false]},
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "metros_carro_rastrojo"
+}

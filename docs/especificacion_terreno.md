@@ -239,3 +239,5 @@ En el trace, `config.mapa` queda como `{"archivo", "sha256"}`: el mapa completo 
 - G no tiene incertidumbre, así que las 20 seeds dan lo mismo.
 - En el campo real, el **despacho anticipado baja el ocio un 52 %** (55 % con anticipada_plus): los traslados son largos y el carro necesita salir antes.
 - **R13 casi nunca alarga una ruta en las corridas** (1 restricción por corrida en anticipada_plus): la cosecha avanza desde la entrada, así que el rastrojo une siempre los caminos con la cosechadora. Además, en la cuadrícula rodear por un camino en escalera mide lo mismo que cruzar (vecindad 4); R13 solo alarga las rutas que tienen que retroceder. La prueba `test_r13_se_registra_cuando_el_carro_rodea_el_cultivo` construye ese caso: llegar al camino (12, 23) sin pisar maíz cuesta 106 celdas más, y se registra la `RESTRICCION`.
+
+Los experimentos de P7 (estrategias, factor de pendiente y G con y sin R13, con la compactación del suelo) están en `docs/resultados_terreno.md`.

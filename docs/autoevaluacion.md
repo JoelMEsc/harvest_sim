@@ -147,3 +147,25 @@ La reproducibilidad del proyecto se aseguró en múltiples niveles:
     ├── plots.py                     # Criterio 5 (Gráficas y tablas)
     └── dashboard.py                 # Criterio 6 (Dashboard de 3 paneles)
 ```
+
+---
+
+## Entrega final: terreno real (escenario G, El Pueblito)
+
+Esta sección agrega a cada criterio lo que aporta el campo real. Los puntajes de arriba corresponden a la primera entrega. Resultados: `docs/resultados_terreno.md`. Contrato: `docs/especificacion_terreno.md`.
+
+| Criterio | Qué agrega el terreno real | Evidencia |
+|---|---|---|
+| **1. Formulación** | Dos reglas nuevas con su justificación agrícola: R12 (nadie sale del predio) y R13 (los carros no pisan el cultivo en pie). El trace 2.3 queda como contrato entre Python y Unity. | `docs/especificacion_terreno.md` §6–§7, `src/harvest_sim/datos/formato.py` |
+| **2. Modelado del entorno** | Cuadrícula de 12 m sacada del KML real: rumbo de los surcos, 3 lotes, arboleda, caminos soldados y patio. El área queda a −2.6 % de la real. Relieve del DEM Copernicus GLO-30 y consumo de combustible por pendiente. | `src/harvest_sim/mapa/`, `config/mapas/el_pueblito.*`, `tests/test_mapa.py`, `tests/test_relieve.py` |
+| **3. Implementación** | Módulo `mapa/` (KML, pasadas, conversión y relieve) y zonas por lote con boustrophedon desde un camino. Los traces 2.2 quedan intactos. 711 pruebas en CI. | `src/harvest_sim/mapa/`, `src/harvest_sim/mundo.py`, `.github/workflows/ci.yml` |
+| **4. Diseño experimental** | Tres experimentos en G, 340 corridas: las 4 estrategias, un barrido del factor de pendiente y G con R13 contra G sin R13, con comparación pareada. | `config/experimentos/terreno_g_*.json` |
+| **5. Métricas** | Compactación del suelo: metros de carro sobre camino, rastrojo y cultivo en pie, calculados desde el log. | `src/harvest_sim/datos/metricas.py` (`suelo_de_carros`) |
+| **6. Visualización** | Unity lee el trace 2.3 y muestra el campo real con relieve, caminos y contornos del KML, maíz solo en las celdas de campo y la atribución de los datos. | harvest-simu-visualization PR #5 (EditMode 55/55), `docs/figuras/terreno/` |
+| **7. Análisis crítico** | En el campo real el despacho anticipado rinde más (−52 % de ocio). R13 cuesta entre 1.4 % y 2.2 % de tiempo y evita hasta 864 m sobre maíz. La estrategia más rápida es la que más compacta el rastrojo. | `docs/resultados_terreno.md` |
+| **8. Reproducibilidad** | El mapa se regenera sin red desde el KML y la ventana local del DEM (`tools/kml_a_mapa.py`); el JSON del repo se compara en las pruebas. Cada dato externo lleva su fuente y su licencia (`geo.atribucion`). | `tests/test_mapa.py::test_el_json_del_repo_esta_al_dia`, `tools/verificar_terreno.py` |
+
+**Lo que falta, dicho con claridad:**
+- G es determinista, así que los IC salen en 0; falta una versión con incertidumbre.
+- El DEM es un modelo de superficie (incluye árboles y construcciones).
+- Unity PlayMode no se corrió en batch.

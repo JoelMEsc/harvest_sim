@@ -14,7 +14,7 @@
 | P4 | Relieve (DEM Copernicus) y consumo por pendiente | Hecho (PR #24) |
 | P5 | Agentes que respetan R13 y corridas de G | Hecho (PR #25) |
 | P6 | Unity: trace 2.3, forma real y relieve | Hecho (harvest-simu-visualization PR #5, EditMode 55/55) |
-| P7 | Pruebas, experimentos y documentación | Pendiente |
+| P7 | Pruebas, experimentos y documentación | Hecho (`docs/resultados_terreno.md`) |
 | M1–M12 | Mejoras, solo después de P7 | Pendiente |
 
 ## Objetivo y criterios de aceptación

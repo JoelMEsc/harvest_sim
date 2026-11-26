@@ -71,3 +71,45 @@ def test_carro_no_planea_por_el_cultivo_en_pie():
     carro = Carro("carro_1", 360)
     mundo.registrar(carro)
     assert mundo.cultivo_en_pie() <= carro._bloqueadas(mundo)
+
+
+def test_suelo_de_carros_en_g(corrida_g):
+    """Compactación (P7): con R13 los carros no pisan cultivo; todo lo que recorren es camino o rastrojo y
+    suma la distancia de los carros en metros."""
+    m = corrida_g["metricas"]
+    assert m["metros_carro_cultivo"] == 0
+    assert m["metros_carro_rastrojo"] > 0 and m["metros_carro_camino"] > 0
+    s = corrida_g["mundo"]["tamano_celda_m"]
+    total = m["metros_carro_camino"] + m["metros_carro_rastrojo"]
+    assert total == m["distancia_carro"] * m["agentes"]["carros"] * s
+    assert 0 < m["porcentaje_carro_rastrojo"] < 100
+
+
+def test_suelo_de_carros_cuenta_cada_tipo_de_celda():
+    """Caso construido con el ejemplo 2.3: el carro entra a un camino, a campo cosechado y a campo en pie."""
+    from harvest_sim.datos.campo import celdas_de_campo
+    from harvest_sim.datos.metricas import suelo_de_carros
+    trace = (json.loads((RAIZ / "tests" / "fixtures" / "trace_ejemplo_23.json").read_text(encoding="utf-8")))
+    mundo = trace["mundo"]
+    campo = sorted(celdas_de_campo(mundo))
+    cosechada, en_pie = campo[0], campo[-1]
+    camino = tuple(mundo["caminos"][0])
+    carro = next(a["id"] for a in trace["agentes"] if a["tipo"] == "carro")
+    base = trace["ticks"][0]
+    trace["ticks"] = [base]
+    for t, celda in enumerate([camino, cosechada, en_pie, en_pie], start=1):
+        cambios = [{"tipo": "AGENTE", "id": carro, "set": {"pose": {"x": celda[0], "y": celda[1], "orientacion": "N"}}}]
+        if t == 1:
+            cambios.append({"tipo": "CELDA_COSECHADA", "celda": list(cosechada), "por": "cosechadora_1", "cantidad": 1})
+        trace["ticks"].append({"tick": t, "cambios": cambios})
+    trace["meta"]["total_ticks"] = 4
+    s = mundo["tamano_celda_m"]
+    r = suelo_de_carros(trace)
+    assert (r["metros_carro_camino"], r["metros_carro_rastrojo"], r["metros_carro_cultivo"]) == (s, s, s)
+    assert r["porcentaje_carro_rastrojo"] == round(100 / 3, 2)
+
+
+def test_sin_mapa_no_hay_metricas_de_suelo():
+    from harvest_sim.datos.metricas import calcular_metricas
+    trace = json.loads((RAIZ / "tests" / "fixtures" / "trace_ejemplo_22.json").read_text(encoding="utf-8"))
+    assert "metros_carro_rastrojo" not in calcular_metricas(trace)
