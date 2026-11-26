@@ -94,6 +94,7 @@ class Cosechadora:
 
         # Rutas en el tiempo y registro de esperas (§5 y §10).
         self._plan: list[rutas.PasoEnTiempo] = []
+        self.cruces_cultivo = 0  # ticks de traslado sin ruta por camino o rastrojo (R13, con mapa)
         self._plan_guardado: tuple[Celda | None, list[rutas.PasoEnTiempo]] = (None, [])
         self._espera_desde: int | None = None
         self._bloqueo_registrado = False
@@ -454,6 +455,14 @@ class Cosechadora:
             return self._avanzar_v01(destino, mundo)
 
         bloqueadas = mundo.bloqueadas_fijas(self.agent_id)
+        # R13 (docs/especificacion_terreno.md §7): en traslado, la cosechadora va por camino y rastrojo. Solo
+        # si no existe esa ruta cruza su propio cultivo en pie (se cuenta en cruces_cultivo).
+        if getattr(mundo, "respetar_cultivo", False):
+            evitar = bloqueadas | (mundo.cultivo_en_pie() - {destino, self.posicion})
+            if rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, evitar) is not None:
+                bloqueadas = evitar
+            else:
+                self.cruces_cultivo += 1
         reservas = self._reservas_de_otros(tick, mundo)
         plan = rutas.bfs_tiempo(self.posicion, destino, tick - 1, mundo.ancho, mundo.alto, bloqueadas, reservas)
         # Compromiso con el plan (la misma regla del carro): como el BFS en el tiempo prefiere esperar,
