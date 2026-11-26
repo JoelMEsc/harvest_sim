@@ -55,11 +55,15 @@ COMBUSTIBLE_POR_DEFECTO = {
     "factor_pendiente": 0.0,
 }
 COSTO_POR_DEFECTO = {"pesos": dict(PESOS_COSTO)}
+# Plan de hileras y rutas: lo que limita el movimiento con politica.movimiento = "hileras". Supuestos de una
+# cosechadora con cabezal maicero de 16 hileras (12 m): radio de giro mínimo ~7.5 m, ~6 km/h cosechando y ~5
+# km/h en la vuelta de cabecera. Con "celdas" no se usan (ni van al trace).
+MAQUINAS_POR_DEFECTO = {"radio_giro_m": 7.5, "velocidad_cosecha_kmh": 6.0, "velocidad_vuelta_kmh": 5.0}
 
 ASIGNACIONES = ("directa", "subasta")
 AVISOS = ("umbral", "qlearning", "sarsa")
 MOVIMIENTOS = ("celdas", "hileras")
-SECCIONES_OPCIONALES = ("politica", "incertidumbre", "combustible", "costo")
+SECCIONES_OPCIONALES = ("politica", "incertidumbre", "combustible", "costo", "maquinas")
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,7 @@ class Config:
     incertidumbre: dict = field(default_factory=dict)  # se completa en __post_init__ (depende de grano)
     combustible: dict = field(default_factory=lambda: copy.deepcopy(COMBUSTIBLE_POR_DEFECTO))
     costo: dict = field(default_factory=lambda: copy.deepcopy(COSTO_POR_DEFECTO))
+    maquinas: dict = field(default_factory=lambda: copy.deepcopy(MAQUINAS_POR_DEFECTO))
     # Mapa real (docs/especificacion_terreno.md §5): el contenido de config/mapas/*.json, más "archivo" y
     # "sha256". None = el mundo rectangular de siempre.
     mapa: dict | None = None
@@ -96,6 +101,7 @@ class Config:
             ),
             "combustible": _con_defectos("combustible", self.combustible, COMBUSTIBLE_POR_DEFECTO),
             "costo": _con_defectos("costo", self.costo, COSTO_POR_DEFECTO),
+            "maquinas": _con_defectos("maquinas", self.maquinas, MAQUINAS_POR_DEFECTO),
         }
         for nombre, valor in completas.items():
             object.__setattr__(self, nombre, valor)
@@ -177,6 +183,9 @@ def _validar_secciones(datos: dict) -> None:
     for clave in ("atender_desde_bodega", "encadenar_servicios", "respetar_cultivo"):
         if not isinstance(pol[clave], bool):
             raise ValueError(f"config: politica.{clave} debe ser true o false")
+    for clave, valor in datos["maquinas"].items():
+        if not _es_numero(valor) or valor <= 0:
+            raise ValueError(f"config: maquinas.{clave} debe ser un número > 0")
     if pol["movimiento"] not in MOVIMIENTOS:
         raise ValueError(f"config: politica.movimiento debe ser uno de {list(MOVIMIENTOS)}")
     if pol["aviso"] not in AVISOS:
@@ -305,7 +314,10 @@ def cargar_config(ruta: str | Path) -> Config:
     )
     datos["combustible"] = _con_defectos("combustible", datos.get("combustible"), COMBUSTIBLE_POR_DEFECTO)
     datos["costo"] = _con_defectos("costo", datos.get("costo"), COSTO_POR_DEFECTO)
+    datos["maquinas"] = _con_defectos("maquinas", datos.get("maquinas"), MAQUINAS_POR_DEFECTO)
     _validar_secciones(datos)
+    if datos["politica"]["movimiento"] == "hileras" and datos.get("mapa") is None:
+        raise ValueError("config: politica.movimiento = hileras requiere un mapa (las hileras y los lotes vienen de él)")
 
     # Con rendimiento fijo, la tolva se llena exacto si su capacidad es múltiplo del grano de una celda.
     # Con rendimiento variable no se exige: la cosechadora se considera llena antes (spec §8).

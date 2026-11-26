@@ -22,7 +22,7 @@ from enum import Enum
 
 from . import rutas
 from .config import POLITICA_POR_DEFECTO
-from .datos.formato import COMBUSTIBLE_RESERVA, R3_CELDA_OCUPADA, R9_BODEGA
+from .datos.formato import COMBUSTIBLE_RESERVA, R14_HILERAS, R3_CELDA_OCUPADA, R9_BODEGA
 from .mensajes import Buzon, Mensaje, TipoMensaje
 from .mundo import Mundo, duracion_ticks
 
@@ -82,6 +82,11 @@ class Cosechadora:
         self._lleno_desde: int | None = None
         # Celda a la que vuelve después de recargar si se fue con grano (regreso de emergencia).
         self._retorno: Celda | None = None
+        # Hileras (plan de hileras y rutas): la vuelta de cabecera hacia la pasada siguiente dura lo que la curva
+        # de Dubins; se cuenta desde que sale de la pasada. None = no está dando una vuelta.
+        self._vuelta_total: int | None = None
+        self._vuelta_ticks = 0
+        self.ticks_en_vueltas = 0
 
         # Administración del servicio (§7).
         self._num_servicio = 0
@@ -163,8 +168,18 @@ class Cosechadora:
 
         if self.estado == EstadoCosechadora.COSECHANDO:
             siguiente = self._camino[self._siguiente]
-            if siguiente not in mundo.vecinos(self.posicion):
-                # un obstáculo separa las dos celdas: se traslada sin cosechar
+            entrada = self._entrada(siguiente, mundo)
+            if siguiente not in mundo.vecinos(self.posicion) or (entrada is not None and self.posicion != entrada):
+                # un obstáculo separa las dos celdas, o (con hileras) es una pasada nueva: se llega a su celda de
+                # entrada en la cabecera y se entra de frente (R14), con la vuelta de Dubins
+                if entrada is not None:
+                    self._vuelta_total = mundo.ticks_de_vuelta(self.posicion, self.orientacion, siguiente)
+                    self._vuelta_ticks = 0
+                    if siguiente in mundo.vecinos(self.posicion):
+                        # sin la regla habría entrado de lado a la pasada (cortando las hileras con el cabezal)
+                        mundo.registrar_restriccion(
+                            self.agent_id, R14_HILERAS,
+                            f"entra a la pasada {list(siguiente)} desde la cabecera {list(entrada)}, no de lado")
                 self.estado = EstadoCosechadora.YENDO_A_CAMPO
             else:
                 if self._celda_ocupada(siguiente, tick, mundo):
@@ -176,7 +191,27 @@ class Cosechadora:
                 return
 
         if self.estado == EstadoCosechadora.YENDO_A_CAMPO:
-            destino = self._retorno or self._camino[self._siguiente]
+            objetivo = self._camino[self._siguiente]
+            entrada = None if self._retorno is not None else self._entrada(objetivo, mundo)
+            if entrada is not None:
+                # hileras: ir a la celda de cabecera de la pasada, completar la vuelta y entrar de frente
+                if self._vuelta_total is not None:
+                    self._vuelta_ticks += 1
+                    self.ticks_en_vueltas += 1
+                if self.posicion != entrada:
+                    self._avanzar_hacia(entrada, tick, mundo)
+                    return
+                if self._vuelta_total is not None and self._vuelta_ticks < self._vuelta_total:
+                    return  # sigue dando la vuelta en la cabecera
+                if self._celda_ocupada(objetivo, tick, mundo):
+                    self._esperar(tick, mundo, f"espera a que se libere {list(objetivo)}")
+                    return
+                self._dejar_de_esperar()
+                self._vuelta_total = None
+                self._mover_a(objetivo)
+                self._cosechar_y_evaluar(tick, mundo, buzon, politica)
+                return
+            destino = self._retorno or objetivo
             if self.posicion != destino and not self._avanzar_hacia(destino, tick, mundo):
                 return
             if self.posicion == destino:
@@ -250,11 +285,26 @@ class Cosechadora:
             self._lleno_desde = tick
         self.estado = EstadoCosechadora.LLENA_ESPERANDO if llena else EstadoCosechadora.COSECHANDO
 
+    @staticmethod
+    def _entrada(celda: Celda, mundo: Mundo) -> Celda | None:
+        """Con hileras: la celda de cabecera desde la que se entra a la pasada que empieza en `celda`."""
+        if not getattr(mundo, "hileras", False):
+            return None
+        entrada = mundo.entrada_de_pasada(celda)
+        return entrada[0] if entrada else None
+
     def _bloqueadas_traslado(self, destino: Celda, mundo: Mundo) -> tuple[set[Celda], bool]:
         """Celdas fijas que el traslado evita y si tiene que cruzar cultivo en pie. R13
         (docs/especificacion_terreno.md §7): en traslado, la cosechadora va por camino y rastrojo; solo si
-        no existe esa ruta cruza su propio cultivo en pie (se cuenta en cruces_cultivo)."""
+        no existe esa ruta cruza su propio cultivo en pie (se cuenta en cruces_cultivo). Con hileras (R14)
+        nunca cruza las pasadas en pie: si no hay ruta por rastrojo, solo puede pasar por cabecera en pie."""
         bloqueadas = mundo.bloqueadas_fijas(self.agent_id)
+        if getattr(mundo, "hileras", False):
+            en_pie = mundo.cultivo_en_pie() - {destino, self.posicion}
+            for evitar, cruza in ((bloqueadas | en_pie, False), (bloqueadas | (en_pie - mundo.cabecera), True)):
+                if rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, evitar) is not None:
+                    return evitar, cruza
+            return bloqueadas, True
         if getattr(mundo, "respetar_cultivo", False):
             evitar = bloqueadas | (mundo.cultivo_en_pie() - {destino, self.posicion})
             if rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, evitar) is not None:
@@ -270,7 +320,7 @@ class Cosechadora:
             return set()
         if self._retorno is None and self._siguiente >= len(self._camino):
             return set()
-        destino = self._retorno or self._camino[self._siguiente]
+        destino = self._retorno or self._entrada(self._camino[self._siguiente], mundo) or self._camino[self._siguiente]
         ruta = rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, self._bloqueadas_traslado(destino, mundo)[0])
         return {destino} | set((ruta or [])[:2])
 

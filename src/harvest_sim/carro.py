@@ -396,13 +396,21 @@ class Carro:
             | self._bloqueadas(mundo) | paso,
             evitar=self._siguiente_del_camino(mundo, cosechadora, pos_cosechadora),
         )
+        if paso and getattr(mundo, "hileras", False):
+            # con hileras, la cosechadora se traslada por pasillos de rastrojo de una celda (cabeceras): el carro
+            # no la persigue mientras se mueve; solo libra su paso y espera a que vuelva a cosechar
+            objetivo = None
         if objetivo is None and paso:
             # no hay dónde esperar junto a ella sin estorbar: se hace a un lado si estorba, o espera donde está
             self.estado = EstadoCarro.YENDO_A_COSECHADORA
             if self.posicion in paso:
-                libres = sorted(v for v in mundo.vecinos(self.posicion)
-                                if v not in paso and v not in self._ocupadas_para_objetivo(mundo) | {mundo.bodega}
-                                | self._obstaculos(mundo) | self._bloqueadas(mundo))
+                prohibidas = (self._ocupadas_para_objetivo(mundo) | {mundo.bodega} | self._obstaculos(mundo)
+                              | self._bloqueadas(mundo))
+                libres = sorted(v for v in mundo.vecinos(self.posicion) if v not in paso and v not in prohibidas)
+                if not libres:
+                    # pasillo de una celda (rastrojo entre cultivo en pie): no hay lado libre, así que avanza por
+                    # el pasillo hasta la primera celda fuera del paso de la cosechadora
+                    libres = self._fuera_del_paso(mundo, paso, prohibidas)
                 if libres:
                     self.objetivo = self._destino = libres[0]
                     self._avanzar(tick, mundo)
@@ -957,6 +965,23 @@ class Carro:
     def _reserva(self, mundo: Mundo) -> float:
         combustible = getattr(getattr(mundo, "config", None), "combustible", None) or {}
         return combustible.get("reserva", RESERVA_POR_DEFECTO)
+
+    def _fuera_del_paso(self, mundo: Mundo, paso: set[Celda], prohibidas: set[Celda]) -> list[Celda]:
+        """La celda más cercana (BFS por donde el carro puede andar) que no está en `paso`; [] si no hay."""
+        vistos = {self.posicion}
+        frente = [self.posicion]
+        while frente:
+            siguiente = []
+            for celda in frente:
+                for v in mundo.vecinos(celda):
+                    if v in vistos or v in prohibidas:
+                        continue
+                    if v not in paso:
+                        return [v]
+                    vistos.add(v)
+                    siguiente.append(v)
+            frente = sorted(siguiente)
+        return []
 
     @staticmethod
     def _paso_de(mundo: Mundo, cosechadora: str) -> set[Celda]:

@@ -128,8 +128,9 @@ R10_OBSTACULO = "R10_obstaculo"
 COMBUSTIBLE_RESERVA = "combustible_reserva"
 R12_FUERA_DE_CAMPO = "R12_fuera_de_campo"    # 2.3: nadie sale del predio
 R13_CULTIVO_EN_PIE = "R13_cultivo_en_pie"    # 2.3: los carros no pisan el cultivo sin cosechar
+R14_HILERAS = "R14_hileras"                  # hileras: a una pasada se entra de frente, nunca de lado
 REGLAS_RESTRICCION = (R3_CELDA_OCUPADA, R4_INTERCAMBIO, R9_BODEGA, R10_OBSTACULO, COMBUSTIBLE_RESERVA,
-                      R12_FUERA_DE_CAMPO, R13_CULTIVO_EN_PIE)
+                      R12_FUERA_DE_CAMPO, R13_CULTIVO_EN_PIE, R14_HILERAS)
 
 # --- Clases de la ontología del curso (docs/ontologia.md) ----------------------------------------
 CLASE_REGISTRO = "AccountabilityRecord"         # meta.clase: el trace es un registro verificable

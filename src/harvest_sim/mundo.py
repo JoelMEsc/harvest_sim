@@ -6,12 +6,15 @@ Especificación: secciones 2, 4.2 y 4.3 (primera entrega); §3, §4, §5, §8, �
 from __future__ import annotations
 
 import logging
+import math
 import random
 
 from .config import Config
 from .datos.campo import celdas_de_campo, expandir_obstaculos, grano_esperado
 from .datos.formato import REGLAS_RESTRICCION
 from . import rutas
+from .mapa import cobertura as cob
+from .mapa import dubins
 
 Celda = tuple[int, int]
 
@@ -67,6 +70,11 @@ class Mundo:
         self._fijas_todos: frozenset[Celda] = self.obstaculos | self.fuera_de_campo
         # R13: solo con mapa y la política activada
         self.respetar_cultivo = bool(self.mapa) and bool(config.politica.get("respetar_cultivo", False))
+        # Plan de hileras y rutas: cabeceras, pasadas paralelas a las hileras (eje x) y vueltas con radio de giro
+        self.hileras = bool(self.mapa) and config.politica.get("movimiento", "celdas") == "hileras"
+        self.cabecera: frozenset[Celda] = frozenset()
+        self._entradas: dict[Celda, tuple[Celda, str]] = {}  # inicio de pasada -> (celda de entrada, rumbo)
+        self._coberturas: dict[str, cob.Cobertura] = {}
 
         self._agentes = {}
         self._cosechadas: dict[Celda, int] = {}  # celda -> grano obtenido
@@ -269,7 +277,10 @@ class Mundo:
         zonas = {}
         for agente, lista in asignacion.items():
             lista.sort(key=lambda u: (min(self._a_camino(c, dist) for c in u[1]), u[0]))
-            zonas[agente] = [(n, self._boustrophedon(celdas, dist)) for n, celdas in lista]
+            if self.hileras:
+                zonas[agente] = [(n, self._cobertura_hileras(n, celdas, dist)) for n, celdas in lista]
+            else:
+                zonas[agente] = [(n, self._boustrophedon(celdas, dist)) for n, celdas in lista]
         return zonas
 
     def _distancias_por_camino(self) -> dict[Celda, int]:
@@ -290,6 +301,50 @@ class Mundo:
         if cerca:
             return min(cerca)
         return 10_000 + min(abs(celda[0] - c[0]) + abs(celda[1] - c[1]) for c in dist)
+
+    # ------------------------------------------------------------------ hileras (plan de hileras y rutas)
+
+    def _vuelta_ticks(self, desde: Celda, rumbo_desde: str, hasta: Celda, rumbo_hasta: str) -> int:
+        """Ticks de la curva de Dubins entre dos poses de celda (centro y rumbo E/O/N/S), con el radio de giro
+        y la velocidad de vuelta de `config.maquinas`. Un tick = una celda a velocidad de cosecha."""
+        m = self.config.maquinas
+        s = self.tamano_celda_m
+        angulo = {"E": 0.0, "S": math.pi / 2, "O": math.pi, "N": 3 * math.pi / 2}
+        c = dubins.camino((desde[0] * s, desde[1] * s, angulo[rumbo_desde]),
+                          (hasta[0] * s, hasta[1] * s, angulo[rumbo_hasta]), m["radio_giro_m"])
+        return math.ceil(c.largo / s * m["velocidad_cosecha_kmh"] / m["velocidad_vuelta_kmh"] - 1e-9)
+
+    def _cobertura_hileras(self, nombre: str, celdas: set[Celda], dist: dict[Celda, int]) -> list[Celda]:
+        """Recorrido de una unidad como en la industria: primero la cabecera («abrir el campo»), luego las pasadas
+        a lo largo de las hileras en el orden de menor costo de vueltas (snake o boustrophedon), y cada pasada se
+        entra desde su celda de cabecera, de frente."""
+        k = cob.celdas_de_cabecera(self.config.maquinas["radio_giro_m"], self.tamano_celda_m)
+        entrada = min(celdas, key=lambda c: (self._a_camino(c, dist), c))
+
+        r = cob.cobertura(celdas, k, desde=entrada, vuelta=self._vuelta_ticks)
+        self._coberturas[nombre] = r
+        self.cabecera = self.cabecera | frozenset(r.cabecera)
+        # se arranca desde el camino que toca la unidad (o desde su primera celda si no toca ninguno)
+        transitables = set(self.celdas_camino)
+        junto = [v for v in self.vecinos(entrada) if v in transitables]
+        inicio = min(junto) if junto else entrada
+        recorrido, entradas, sin_alcance = cob.secuencia_alcanzable(r, inicio, transitables)
+        if sin_alcance:
+            registrador.warning("unidad %s: %d celdas no se alcanzan sin cruzar cultivo", nombre, sin_alcance)
+        self._entradas.update(entradas)
+        return recorrido
+
+    def entrada_de_pasada(self, celda: Celda) -> tuple[Celda, str] | None:
+        """Si `celda` es el inicio de una pasada (con hileras): la celda de cabecera desde la que se entra y el
+        rumbo de la pasada. R14: a una pasada se entra de frente, a lo largo de las hileras, nunca de lado."""
+        return self._entradas.get(celda)
+
+    def ticks_de_vuelta(self, desde: Celda, rumbo_desde: str, celda: Celda) -> int:
+        """Ticks que toma llegar de `desde` (con su rumbo) al inicio de la pasada `celda`, según Dubins."""
+        entrada = self._entradas.get(celda)
+        if entrada is None or not self.hileras:
+            return 0
+        return self._vuelta_ticks(desde, rumbo_desde, celda, entrada[1])
 
     def _boustrophedon(self, celdas: set[Celda], dist: dict[Celda, int]) -> list[Celda]:
         """Orden de cosecha de una unidad: una fila es una pasada. Empieza en la fila de una orilla y en el
