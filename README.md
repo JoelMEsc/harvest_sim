@@ -331,6 +331,7 @@ runs/                    salidas de las corridas (no se versionan)
 
 | Documento | Para qué |
 |---|---|
+| [`docs/temas_del_curso.md`](docs/temas_del_curso.md) | Cada tema del curso TC2008B (multiagentes y gráficas): dónde se usa, cómo y con qué resultado; lo que falta |
 | [`docs/resultados_terreno.md`](docs/resultados_terreno.md) | Resultados del campo real (escenario G): estrategias, factor de pendiente, R13 y compactación del suelo |
 | [`docs/especificacion_terreno.md`](docs/especificacion_terreno.md) | Terreno real: KML a mapa, trace 2.3, reglas R12 y R13, relieve, zonas, escenario G y Unity |
 | [`docs/especificacion_mejoras.md`](docs/especificacion_mejoras.md), [`docs/resultados_mejoras.md`](docs/resultados_mejoras.md) | Mejoras M1–M12: formulación y resultados |
