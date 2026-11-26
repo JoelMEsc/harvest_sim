@@ -28,7 +28,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from . import rutas
-from .datos.formato import CARRO
+from .datos.formato import CARRO, R13_CULTIVO_EN_PIE
 from .mensajes import Mensaje, TipoMensaje
 
 if TYPE_CHECKING:
@@ -240,7 +240,8 @@ class Carro:
             cosechadora,
             mundo.ancho,
             mundo.alto,
-            bloqueadas=self._ocupadas_para_objetivo(mundo) | {mundo.bodega} | self._obstaculos(mundo),
+            bloqueadas=self._ocupadas_para_objetivo(mundo) | {mundo.bodega} | self._obstaculos(mundo)
+            | self._bloqueadas(mundo),
             evitar=self._siguiente_del_camino(mundo, mensaje.emisor, cosechadora),
         )
         if objetivo is None:
@@ -387,7 +388,8 @@ class Carro:
             pos_cosechadora,
             mundo.ancho,
             mundo.alto,
-            bloqueadas=self._ocupadas_para_objetivo(mundo) | {mundo.bodega} | self._obstaculos(mundo),
+            bloqueadas=self._ocupadas_para_objetivo(mundo) | {mundo.bodega} | self._obstaculos(mundo)
+            | self._bloqueadas(mundo),
             evitar=self._siguiente_del_camino(mundo, cosechadora, pos_cosechadora),
         )
         if objetivo is None:
@@ -429,7 +431,8 @@ class Carro:
         mundo.duracion para estimar sortearía el extra aleatorio y cambiaría la secuencia.
         """
         config = mundo.config
-        obstaculos = self._obstaculos(mundo)
+        # con mapa: lo que el carro puede pisar ahora (sin fuera de campo ni cultivo en pie, R12 y R13)
+        obstaculos = self._obstaculos(mundo) | self._bloqueadas(mundo)
         base, bodega = mundo.base_de(self.agent_id), mundo.bodega
         cache: dict[Celda, dict[Celda, int]] = {}
 
@@ -520,7 +523,7 @@ class Carro:
             servicio = self.servicios[0]
             cosechadora, carga = (servicio["x"], servicio["y"]), servicio["capacidad"]
         base, bodega = mundo.base_de(self.agent_id), mundo.bodega
-        dist = rutas.distancias(cosechadora, mundo.ancho, mundo.alto, self._obstaculos(mundo))
+        dist = rutas.distancias(cosechadora, mundo.ancho, mundo.alto, self._obstaculos(mundo) | self._bloqueadas(mundo))
 
         def d(a: Celda, b: Celda) -> int:
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -582,7 +585,7 @@ class Carro:
     def _fijar_destino(self, destino: Celda, mundo: Mundo) -> None:
         """Calcula la ruta BFS hacia `destino` tratando a los otros agentes como bloqueados."""
         self._destino = destino
-        bloqueadas = mundo.ocupadas(self.agent_id) | mundo.bloqueadas_fijas(self.agent_id)
+        bloqueadas = mundo.ocupadas(self.agent_id) | self._bloqueadas(mundo)
         # Si ahora no hay ruta (destino ocupado), se queda vacía y siguiente_paso la recalcula.
         self.ruta = mundo.ruta_bfs(self.posicion, destino, bloqueadas) or []
 
@@ -601,7 +604,7 @@ class Carro:
             mundo.ancho,
             mundo.alto,
             mundo.ocupadas(self.agent_id),
-            mundo.bloqueadas_fijas(self.agent_id),
+            self._bloqueadas(mundo),
         )
         if paso is None:
             # Quería moverse y no pudo porque otro agente le tapa el paso.
@@ -621,7 +624,7 @@ class Carro:
         vuelve a «esperar un tick más»). Una espera planeada no es bloqueo; BLOQUEO solo si no
         hay ninguna ruta en el tiempo aunque sin otros agentes sí la habría.
         """
-        bloqueadas = mundo.bloqueadas_fijas(self.agent_id) | self._obstaculos(mundo)
+        bloqueadas = self._bloqueadas(mundo) | self._obstaculos(mundo)
         reservas = self._reservas_de_otros(tick, mundo)
         ruta = self._planear(tick - 1, mundo, bloqueadas, reservas)
         vigente = self._plan_vigente(tick, mundo, bloqueadas, reservas)
@@ -798,7 +801,7 @@ class Carro:
         if self._desalojo is not None and reclamante > self.agent_id:
             return  # yo también pedí paso y tengo prioridad
         ocupadas = mundo.ocupadas(self.agent_id)
-        bloqueadas = mundo.bloqueadas_fijas(self.agent_id) | self._obstaculos(mundo)
+        bloqueadas = self._bloqueadas(mundo) | self._obstaculos(mundo)
         libres = [c for c in mundo.vecinos(self.posicion)
                   if c not in ocupadas and c not in bloqueadas and (c, tick) not in de_otros]
         if not libres:
@@ -825,6 +828,13 @@ class Carro:
             bloqueadas, self._obstaculos(mundo), reservas, rutas.HORIZONTE + 1,
             self._permanencia(mundo),
         )
+        # R13: la ruta se alarga por rodear el cultivo en pie (docs/especificacion_terreno.md §7)
+        if getattr(mundo, "respetar_cultivo", False) and self._destino is not None:
+            sin_cultivo = rutas.bfs(self.posicion, self._destino, mundo.ancho, mundo.alto,
+                                    bloqueadas - mundo.cultivo_en_pie())
+            con_cultivo = rutas.bfs(self.posicion, self._destino, mundo.ancho, mundo.alto, bloqueadas)
+            if sin_cultivo is not None and con_cultivo is not None and len(con_cultivo) > len(sin_cultivo):
+                reglas = list(reglas) + [R13_CULTIVO_EN_PIE]
         for regla in reglas:
             if regla not in self._restricciones_del_tramo:
                 self._restricciones_del_tramo.add(regla)
@@ -846,7 +856,7 @@ class Carro:
         )
         if (not self._plan_restante and viajando
                 and self._destino is not None and self.posicion != self._destino):
-            bloqueadas = mundo.bloqueadas_fijas(self.agent_id) | self._obstaculos(mundo)
+            bloqueadas = self._bloqueadas(mundo) | self._obstaculos(mundo)
             reservas = dict(mundo.reservas(excepto=self.agent_id))
             self._guardar_plan(self._planear(tick, mundo, bloqueadas, reservas) or [])
 
@@ -889,7 +899,7 @@ class Carro:
         estancia = [(self.posicion, t) for t in range(tick, min(deposito, limite) + 1)]
         if deposito >= limite:
             return estancia
-        bloqueadas = mundo.bloqueadas_fijas(self.agent_id) | self._obstaculos(mundo)
+        bloqueadas = self._bloqueadas(mundo) | self._obstaculos(mundo)
         salida = rutas.bfs_tiempo(
             self.posicion, mundo.base_de(self.agent_id), deposito, mundo.ancho, mundo.alto,
             bloqueadas, self._reservas_de_otros(tick, mundo), limite - deposito,
@@ -918,6 +928,12 @@ class Carro:
         config = getattr(mundo, "config", None)
         return (self._politica(mundo)["asignacion"] == "subasta"
                 or getattr(config, "num_carros", 1) > 1)
+
+    def _bloqueadas(self, mundo: Mundo) -> set[Celda]:
+        """Lo que el carro no puede pisar ahora: con mapa, las fijas más el cultivo en pie (R12, R13); si el
+        mundo no lo sabe (dobles de prueba), las fijas de siempre."""
+        para = getattr(mundo, "bloqueadas_para", None)
+        return para(self.agent_id) if callable(para) else mundo.bloqueadas_fijas(self.agent_id)
 
     @staticmethod
     def _obstaculos(mundo: Mundo) -> set[Celda]:

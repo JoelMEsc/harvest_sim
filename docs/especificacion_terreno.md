@@ -160,7 +160,7 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 - `mundo.bloqueadas_para(agent_id)` devuelve las celdas fijas más, para los carros, el campo sin cosechar. El conjunto en pie se actualiza con cada cosecha.
 - El carro se estaciona junto a la cosechadora en rastrojo o camino. La celda de atrás en la pasada siempre está cosechada.
 - Cuando la ruta de un carro se alarga por rodear el cultivo, se registra `RESTRICCION` con `regla: "R13_cultivo_en_pie"`, una por tramo.
-- En traslado, la cosechadora prefiere caminos y rastrojo. Si no hay ruta así (un borde irregular del lote), cruza su propio cultivo en pie; eso se cuenta y en G debe ser cero o casi.
+- En traslado, la cosechadora prefiere caminos y rastrojo. Si no hay ruta así (un borde irregular del lote), cruza su propio cultivo en pie y se cuenta (`Cosechadora.cruces_cultivo`). En G pasa 16 ticks por corrida (~1 % de sus ticks), en los cambios de pasada sobre bordes irregulares.
 - Si un carro no tiene ruta, rechaza la llamada con `sin_ruta`.
 
 ## 8. Relieve
@@ -222,3 +222,19 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 **Corrida de humo** (seed 0, estrategia base, antes de los ajustes de agentes de P5): termina en 1708 ticks y su trace 2.3 valida, con 0 colisiones y 0 BLOQUEO. Corre en ~11 s.
 
 En el trace, `config.mapa` queda como `{"archivo", "sha256"}`: el mapa completo ya va en `mundo`. A–F no cambian sus métricas, aunque `config.politica` ahora incluye `respetar_cultivo: false`.
+
+## 13. Resultados de P5: agentes en el campo real
+
+`tools/verificar_terreno.py` corre G con las 4 estrategias × 20 seeds y revisa las reglas **desde el trace**:
+
+| Estrategia | Ticks | Ocio total | Colisiones | BLOQUEO | R12 | Carros sobre cultivo (R13) | Cosechadora sobre cultivo sin cosechar |
+|---|---|---|---|---|---|---|---|
+| base | 1754 | 685 | 0 | 0 | 0 | 0 | 16 ticks |
+| subasta | 1773 | 717 | 0 | 0 | 0 | 0 | 16 ticks |
+| anticipada | 1514 | 212 | 0 | 0 | 0 | 0 | 16 ticks |
+| anticipada_plus | 1505 | 202 | 0 | 0 | 0 | 0 | 16 ticks |
+
+- Las 80 corridas terminan y validan, y entregan el 100 % del grano. Tardan ~21 s cada una.
+- G no tiene incertidumbre, así que las 20 seeds dan lo mismo.
+- En el campo real, el **despacho anticipado baja el ocio un 69 %**: los traslados son largos y el carro necesita salir antes.
+- **R13 no alarga ninguna ruta en las corridas:** la cosecha avanza desde la entrada, así que el rastrojo une siempre los caminos con la cosechadora. Además, en la cuadrícula rodear por un camino en escalera mide lo mismo que cruzar (vecindad 4); R13 solo alarga las rutas que tienen que retroceder. La prueba `test_r13_se_registra_cuando_el_carro_rodea_el_cultivo` construye ese caso: llegar al camino (12, 23) sin pisar maíz cuesta 106 celdas más, y se registra la `RESTRICCION`.
