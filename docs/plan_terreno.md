@@ -16,6 +16,7 @@
 | P6 | Unity: trace 2.3, forma real y relieve | Hecho (harvest-simu-visualization PR #5, EditMode 55/55) |
 | P7 | Pruebas, experimentos y documentación | Hecho (`docs/resultados_terreno.md`) |
 | M1 | Q-learning y SARSA para el despacho | Hecho (`docs/resultados_mejoras.md`): SARSA −37 % de ocio en G; en Unity con placa y tarjeta por decisión (harvest-simu-visualization PR #6) |
+| H0–H8 | **Hileras y rutas de la industria** (antes de M2): cabeceras, pasadas paralelas a las hileras, orden snake/boustrophedon, vueltas Dubins con radio de giro, A* con rumbo en lugar de BFS, descarga en marcha y Unity sobre la trayectoria (referencia: Fields2Cover y AgOpenGPS). Bandera `politica.movimiento` | En curso: H0 (línea base medida: en G, 102 entradas de lado a una pasada, 23 pasos sobre cultivo y 12 vueltas de 180° en un tick por corrida) |
 | M2–M12 | Mejoras siguientes, en orden | Pendiente |
 
 ## Objetivo y criterios de aceptación

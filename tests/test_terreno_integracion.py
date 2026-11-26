@@ -132,3 +132,11 @@ def test_carro_no_encierra_a_la_cosechadora_que_se_traslada():
     logging.disable(logging.NOTSET)
     m = trace["metricas"]
     assert m["porcentaje_entregado"] == 100.0 and m["colisiones"] == 0
+
+
+def test_linea_base_del_movimiento_por_celdas(corrida_g):
+    """Plan de hileras y rutas, H0: con el movimiento de siempre las cosechadoras no respetan las hileras
+    (entran de lado a cada pasada nueva, pisan cultivo y dan vueltas de 180° en un tick). Es la línea base."""
+    m = corrida_g["metricas"]
+    assert m["entradas_de_lado"] > 50 and m["pasos_sobre_cultivo"] > 0 and m["vueltas_instantaneas"] > 0
+    assert 0 < m["eficiencia_campo"] < 100

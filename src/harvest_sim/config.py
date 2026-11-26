@@ -32,6 +32,9 @@ POLITICA_POR_DEFECTO = {
     # config/aprendizaje/qtabla_<algoritmo>_<escenario>.json). Desactivado por defecto.
     "aviso": "umbral",
     "qtabla": None,
+    # Plan de hileras y rutas: "celdas" = el movimiento de siempre (por celdas, BFS); "hileras" = cabeceras,
+    # pasadas paralelas a las hileras, vueltas con radio de giro y A* con rumbo. Desactivado por defecto.
+    "movimiento": "celdas",
 }
 INCERTIDUMBRE_POR_DEFECTO = {
     # None = {minimo: grano_por_celda, maximo: grano_por_celda}: depende de otro campo
@@ -55,6 +58,7 @@ COSTO_POR_DEFECTO = {"pesos": dict(PESOS_COSTO)}
 
 ASIGNACIONES = ("directa", "subasta")
 AVISOS = ("umbral", "qlearning", "sarsa")
+MOVIMIENTOS = ("celdas", "hileras")
 SECCIONES_OPCIONALES = ("politica", "incertidumbre", "combustible", "costo")
 
 
@@ -173,6 +177,8 @@ def _validar_secciones(datos: dict) -> None:
     for clave in ("atender_desde_bodega", "encadenar_servicios", "respetar_cultivo"):
         if not isinstance(pol[clave], bool):
             raise ValueError(f"config: politica.{clave} debe ser true o false")
+    if pol["movimiento"] not in MOVIMIENTOS:
+        raise ValueError(f"config: politica.movimiento debe ser uno de {list(MOVIMIENTOS)}")
     if pol["aviso"] not in AVISOS:
         raise ValueError(f"config: politica.aviso debe ser uno de {list(AVISOS)}")
     if pol["aviso"] != "umbral" and pol["asignacion"] != "subasta":
