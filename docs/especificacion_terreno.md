@@ -199,3 +199,23 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 | `test_bloqueadas_para` | Para el carro incluye el cultivo en pie y lo libera al cosecharse; la cosechadora no lo incluye; con `respetar_cultivo: false` nada cambia |
 | Integración G | Termina con 4 estrategias × 20 seeds, 0 colisiones, nadie en `fuera_de_campo` (R12) y ningún carro sobre cultivo en pie (R13) |
 | Relieve | Las alturas coinciden con el DEM en puntos de control; con factor 0 el consumo es igual |
+
+## 12. Escenario G (El Pueblito)
+
+`config/escenario_g.json`: 2 cosechadoras y 2 carros sobre `mapas/el_pueblito.json`, con `politica.respetar_cultivo: true`. El ancho, el alto y los obstáculos vienen del mapa. Las unidades siguen siendo las del simulador (celdas, ticks y unidades de grano), pero los valores se derivaron de datos reales para que las proporciones sean realistas:
+
+| Parámetro | Valor | Cómo se obtuvo |
+|---|---|---|
+| Celda | 12 m | Cabezal maicero de 16 hileras a 76 cm |
+| 1 unidad de grano | una celda de 12 × 12 m ≈ 65 kg | Maíz de temporal en Los Altos de Jalisco, ~4.5 t/ha (supuesto; SIAP reporta 3–6 t/ha en la región) |
+| 1 tick | ~7 s | Lo que tarda la cosechadora en avanzar una celda de 12 m a ~6 km/h |
+| `capacidad_cosechadora` | 120 | Tolva de ~8 t (cosechadora de tamaño medio; la S7 700 lleva 10.6 m³) |
+| `capacidad_carro` | 360 | Tres tolvas (~23 t; un Kinze 1121 lleva ~28 t) |
+| `tasa_transferencia` | 12 por tick | Sinfín de descarga de ~150 L/s (~0.11 t/s ≈ 0.8 t por tick) |
+| `tasa_descarga` | 24 por tick | Carro de 550 bu/min (~14 t/min ≈ 1.6 t por tick) |
+
+**Zonas:** la cosechadora 1 lleva el lote C (922 celdas) y la 2 los lotes A y B (840).
+
+**Corrida de humo** (seed 0, estrategia base, antes de los ajustes de agentes de P5): termina en 1708 ticks y su trace 2.3 valida, con 0 colisiones y 0 BLOQUEO. Corre en ~11 s.
+
+En el trace, `config.mapa` queda como `{"archivo", "sha256"}`: el mapa completo ya va en `mundo`. A–F no cambian sus métricas, aunque `config.politica` ahora incluye `respetar_cultivo: false`.
