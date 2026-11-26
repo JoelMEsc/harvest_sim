@@ -17,10 +17,10 @@ Python es la única fuente de verdad y Unity solo reproduce el trace (especifica
 | Archivo | Qué es |
 |---|---|
 | `config/mapas/el_pueblito.kml` | Copia del KML de `docs/cultivo/harvestisim.kml` (la fuente) |
-| `config/mapas/el_pueblito.yaml` | Configuración del convertidor: tamaño de celda, tolerancias, ancho de camino y DEM |
+| `config/mapas/el_pueblito.convertidor.json` | Configuración del convertidor: tamaño de celda, tolerancias, ancho de camino y DEM (JSON, como los escenarios) |
 | `config/mapas/el_pueblito.json` | Mapa generado (§5). **No se edita a mano** |
 | `config/escenario_g.json` | Escenario G: agentes, capacidades y tasas, más `"mapa": "mapas/el_pueblito.json"` |
-| `tools/kml_a_mapa.py` | Genera el mapa desde el KML (y desde el DEM, si se pide) |
+| `tools/kml_a_mapa.py` | Genera el mapa desde el KML (y desde el DEM, si se pide); `--figura` dibuja el mapa (`docs/figuras/terreno/el_pueblito_mapa.png`) |
 | `src/harvest_sim/mapa/` | Lector del KML, proyección, soldadura de caminos, rasterizado y pasadas |
 
 ## 3. Convenciones del KML
@@ -63,16 +63,18 @@ Cada celda es de un solo tipo, con esta prioridad:
 
 | Prioridad | Tipo | Regla |
 |---|---|---|
-| 1 | `obstaculo` | Toca un obstáculo ampliado `margen_obstaculo_m` (3 m) |
-| 2 | `camino` | La línea central de un camino pasa por la celda (todas las celdas que toca la línea, para que la red quede conectada en vecindad 4) |
+| 1 | `obstaculo` | Toca el obstáculo. Con celdas de 12 m, media celda ya da más que el margen de 3 m que deja la cosechadora |
+| 2 | `camino` | Toca el camino (con su ancho), **salvo** que la celda sea mayoría lote y la línea central del camino no pase por el centro de la celda: un camino que corre por la orilla no se come el campo que apenas roza |
 | 3 | `campo` | Al menos el 50 % del área de la celda cae en un lote |
 | 4 | `patio` | Bodega y bases (§4.5) |
 | 5 | `fuera_de_campo` | Todo lo demás |
 
+Si, por respetar el campo de las orillas, los caminos en celdas quedan en varias piezas (aunque la red geométrica sea una), cada pieza se une a la principal por el **puente más corto de celdas de campo**. Esas celdas pasan a camino y el reporte dice cuántas son (21 en El Pueblito).
+
 Cada celda de campo guarda su lote (A, B o C).
 
 **Validaciones** (el convertidor falla si no se cumplen):
-- el área cosechable difiere del área de los lotes en menos de 5 %;
+- el área cosechable difiere en menos de 5 % del área real: lotes menos obstáculos, porque el KML no tiene huecos y la arboleda está dentro del lote C. En El Pueblito la diferencia es de −3.2 %;
 - todo el campo es alcanzable desde la bodega por camino, patio o campo;
 - cada lote toca al menos una celda de camino.
 
