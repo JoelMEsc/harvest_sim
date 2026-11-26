@@ -713,6 +713,10 @@ class Carro:
 
         Horizonte + 1 para revisar hasta desde_tick + 1 + HORIZONTE, lo mismo que se reserva.
         """
+        planear = getattr(mundo, "planear_con_rumbo", None)
+        if callable(planear):  # con hileras, A* con rumbo; sin hileras, el BFS de siempre
+            return planear(self.posicion, self.orientacion, self._destino, desde_tick, bloqueadas, reservas,
+                           rutas.HORIZONTE + 1, self._permanencia(mundo), carro=True)
         return rutas.bfs_tiempo(
             self.posicion, self._destino, desde_tick, mundo.ancho, mundo.alto,
             bloqueadas, reservas, rutas.HORIZONTE + 1, self._permanencia(mundo),

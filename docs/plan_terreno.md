@@ -16,7 +16,7 @@
 | P6 | Unity: trace 2.3, forma real y relieve | Hecho (harvest-simu-visualization PR #5, EditMode 55/55) |
 | P7 | Pruebas, experimentos y documentación | Hecho (`docs/resultados_terreno.md`) |
 | M1 | Q-learning y SARSA para el despacho | Hecho (`docs/resultados_mejoras.md`): SARSA −37 % de ocio en G; en Unity con placa y tarjeta por decisión (harvest-simu-visualization PR #6) |
-| H0–H8 | **Hileras y rutas de la industria** (antes de M2): cabeceras, pasadas paralelas a las hileras, orden snake/boustrophedon, vueltas Dubins con radio de giro, A* con rumbo en lugar de BFS, descarga en marcha y Unity sobre la trayectoria (referencia: Fields2Cover y AgOpenGPS). Bandera `politica.movimiento` | En curso. H0 hecho (PR #34): línea base de G, 102 entradas de lado, 23 pasos sobre cultivo y 12 vueltas de 180° en un tick. H1–H3 hechos: con `hileras`, 0 entradas de lado fuera de la cabecera y 0 pasos sobre cultivo; falta H4 (A* con rumbo para las vueltas de los traslados) y lo demás |
+| H0–H8 | **Hileras y rutas de la industria** (antes de M2): cabeceras, pasadas paralelas a las hileras, orden snake/boustrophedon, vueltas Dubins con radio de giro, A* con rumbo en lugar de BFS, descarga en marcha y Unity sobre la trayectoria (referencia: Fields2Cover y AgOpenGPS). Bandera `politica.movimiento` | En curso. H0 hecho (PR #34): línea base de G, 102 entradas de lado, 23 pasos sobre cultivo y 12 vueltas de 180° en un tick. H1–H3 hechos (PR #35): con `hileras`, 0 entradas de lado fuera de la cabecera y 0 pasos sobre cultivo. H4 hecho: A* con rumbo, 0 vueltas instantáneas. Siguen H5 (trace 2.4), H6 (descarga en marcha), H7 (Unity) y H8 (experimentos) |
 | M2–M12 | Mejoras siguientes, en orden | Pendiente |
 
 ## Objetivo y criterios de aceptación

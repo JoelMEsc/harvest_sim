@@ -316,4 +316,7 @@ Formato por entrada:
   - Compilar Fields2Cover es una dependencia pesada para la simulación y el CI.
   - Prohibir solo la entrada de lado deja atascos y vueltas de radio 0.
   - Dejar la cabecera al final obliga a dar las vueltas sobre cultivo en pie.
-- **Pendiente:** H4. Los traslados todavía invierten el rumbo en un tick (29 por corrida en G); A* con rumbo lo resuelve.
+- **H4, A\* con rumbo** (`rutas.astar_rumbo_tiempo`): con hileras, los traslados de la cosechadora y del carro dejan el BFS y usan A* sobre (celda, rumbo, tick), con las mismas reservas y el mismo horizonte.
+  - Girar 90° cuesta el cuarto de circunferencia a su velocidad. La media vuelta es una vuelta en K de varios ticks: 4 la cosechadora; el carro (R = 6 m, 10 km/h), 0 y 2.
+  - En G con `anticipada_plus` pasa de 29 vueltas de 180° en un tick a 0, y termina en 1999 ticks con 454 de ocio.
+  - La métrica cuenta como instantánea solo la inversión sin al menos 2 ticks detenida.

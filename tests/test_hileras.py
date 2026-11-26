@@ -264,3 +264,50 @@ def test_sin_la_bandera_g_es_el_de_siempre(mundo_g_hileras):
     c = cargar_config(RAIZ / "config" / "escenario_g.json")
     m = Mundo(c)
     assert not m.hileras and not m.cabecera and not m._entradas
+
+
+# --- H4: A* con rumbo en lugar de BFS (rutas.astar_rumbo_tiempo) ------------------------------------------------
+
+from harvest_sim import rutas  # noqa: E402
+
+
+def test_derecho_cuesta_un_tick_por_celda():
+    assert rutas.astar_rumbo_tiempo((0, 0), "E", (3, 0), 0, 5, 5, set(), {}) == [((1, 0), 1), ((2, 0), 2), ((3, 0), 3)]
+
+
+def test_media_vuelta_es_una_vuelta_en_k_y_cuesta_tiempo():
+    plan = rutas.astar_rumbo_tiempo((2, 0), "E", (0, 0), 0, 5, 5, set(), {}, giro90=1, giro180=4)
+    assert plan[:4] == [((2, 0), t) for t in range(1, 5)] and plan[-1] == ((0, 0), 6)
+    # con BFS daba la media vuelta gratis: 2 ticks
+    assert len(rutas.bfs_tiempo((2, 0), (0, 0), 0, 5, 5, set(), {})) == 2
+
+
+def test_girar_noventa_grados_cuesta_un_tick_extra():
+    plan = rutas.astar_rumbo_tiempo((0, 0), "E", (0, 2), 0, 5, 5, set(), {}, giro90=1, giro180=4)
+    assert plan == [((0, 0), 1), ((0, 1), 2), ((0, 2), 3)]
+
+
+def test_respeta_reservas_y_obstaculos():
+    plan = rutas.astar_rumbo_tiempo((1, 0), "E", (1, 2), 0, 3, 3, {(1, 1)}, {}, giro90=1, giro180=4)
+    assert plan[-1][0] == (1, 2) and all(c != (1, 1) for c, _ in plan)
+    ocupado = {((2, 0), 1): "otro"}
+    plan = rutas.astar_rumbo_tiempo((1, 0), "E", (3, 0), 0, 5, 5, set(), ocupado, giro90=1, giro180=4)
+    assert ((2, 0), 1) not in plan and plan[-1][0] == (3, 0)
+
+
+def test_sin_hileras_el_mundo_sigue_con_bfs():
+    c = cargar_config(RAIZ / "config" / "escenario_g.json")
+    m = Mundo(c)
+    assert m.planear_con_rumbo((30, 1), "N", (30, 3), 0, set(), {}) == rutas.bfs_tiempo(
+        (30, 1), (30, 3), 0, m.ancho, m.alto, set(), {})
+
+
+def test_costos_de_giro(mundo_g_hileras):
+    # cosechadora: πR/2 = 11.8 m a 5 km/h ≈ 1.18 ticks → 1 extra; K = 4. Carro: R = 6 m a 10 km/h → 0 y 2
+    assert mundo_g_hileras.costos_de_giro() == (1, 4)
+    assert mundo_g_hileras.costos_de_giro(carro=True) == (0, 2)
+
+
+def test_g_con_hileras_sin_vueltas_instantaneas(corrida_g_hileras):
+    m = corrida_g_hileras["metricas"]
+    assert m["vueltas_instantaneas"] == 0 and m["pasos_sobre_cultivo"] == 0 and m["colisiones"] == 0

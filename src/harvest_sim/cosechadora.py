@@ -540,7 +540,11 @@ class Cosechadora:
         if cruza:
             self.cruces_cultivo += 1
         reservas = self._reservas_de_otros(tick, mundo)
-        plan = rutas.bfs_tiempo(self.posicion, destino, tick - 1, mundo.ancho, mundo.alto, bloqueadas, reservas)
+        planear = getattr(mundo, "planear_con_rumbo", None)
+        if callable(planear):  # con hileras, A* con rumbo; sin hileras, el BFS de siempre
+            plan = planear(self.posicion, self.orientacion, destino, tick - 1, bloqueadas, reservas)
+        else:
+            plan = rutas.bfs_tiempo(self.posicion, destino, tick - 1, mundo.ancho, mundo.alto, bloqueadas, reservas)
         # Compromiso con el plan (la misma regla del carro): como el BFS en el tiempo prefiere esperar,
         # replanear cada tick puede posponer la salida para siempre. Si el plan anterior sigue valiendo,
         # se cumple; solo se cambia por uno que llegue antes.
