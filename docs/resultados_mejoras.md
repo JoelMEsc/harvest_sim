@@ -99,6 +99,20 @@ Q-learning contra SARSA muestra el contraste clásico del cliff:
 - Antes del arreglo 2, Q-learning (off-policy) terminaba cayendo en el cliff mientras exploraba (hasta 8 por episodio al final del entrenamiento en D).
 - SARSA (on-policy) aprende el costo de explorar cerca del borde y lo evita.
 
+### En Unity
+
+Unity reproduce las corridas de `qlearning` y `sarsa` y muestra cada decisión de la tabla, sin decidir nada: todo sale del evento `DECISION_DESPACHO` del trace (GioMax102/harvest-simu-visualization PR #6, EditMode 69/69).
+
+- **Placa del agente:** «Q: pide carro» en el tick en que la cosechadora pide. Si decidió el respaldo, dice «Umbral»; si se llenó sin carro (cliff), «Tolva llena».
+- **Tarjeta del agente:** la última decisión con su estado y los valores Q, por ejemplo «Q · tolva 60–80 % · 2+ libres · seguir −48 / pedir −46 → pide».
+- **Selector de estrategia:** se llena con lo que el servidor puede correr en cada escenario; `qlearning` y `sarsa` solo aparecen en D y G, que tienen tabla.
+- **Panel de métricas:** decisiones Q, pedidos por la tabla o por el umbral, y veces que la tolva se llenó sin carro.
+- **Cuántas decisiones son:** en G con SARSA, 41 en toda la corrida. 14 pedidos salen de la tabla, ninguno del respaldo, y hay 2 cliffs.
+
+![M1 en Unity: G con SARSA, tick 81](figuras/mejoras/m1_unity_g_sarsa.jpg)
+
+En el tick 81, la cosechadora 1 tiene la tolva al 60–80 % y los dos carros libres. La tabla vale −48 para seguir y −46 para pedir, así que pide (las líneas azules son su llamada a los dos carros). La cosechadora 2, con la tolva al 40–60 %, sigue cosechando.
+
 ### Limitaciones
 
 - **Una tabla por escenario:** no se probó si la de G sirve en otro campo real.
