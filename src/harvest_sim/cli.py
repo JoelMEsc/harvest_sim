@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--salida", default="runs", help="carpeta base de salidas (default: runs)")
     parser.add_argument("--sin-plots", action="store_true", help="no generar gráficas")
     parser.add_argument("--seed", type=int, help="sobrescribe la semilla del escenario")
-    parser.add_argument("--estrategia", choices=("base", "subasta", "anticipada", "anticipada_plus"),
+    parser.add_argument("--estrategia", choices=("base", "subasta", "anticipada", "anticipada_plus", "qlearning", "sarsa"),
                         help="sobrescribe la política con una estrategia del experimento")
     nivel = parser.add_mutually_exclusive_group()
     nivel.add_argument("--silencioso", action="store_true", help="log de consola: solo advertencias y errores")
@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
             estrategias = getattr(experimentos, "ESTRATEGIAS", None)
             if estrategias is None:
                 raise ValueError("--estrategia requiere ESTRATEGIAS de Datos")
+            estrategias = {**estrategias, **getattr(experimentos, "ESTRATEGIAS_APRENDIDAS", {})}
             politica = getattr(config, "politica", None)
             if politica is None:
                 raise ValueError("--estrategia requiere una configuración con politica")

@@ -113,3 +113,22 @@ def test_sin_mapa_no_hay_metricas_de_suelo():
     from harvest_sim.datos.metricas import calcular_metricas
     trace = json.loads((RAIZ / "tests" / "fixtures" / "trace_ejemplo_22.json").read_text(encoding="utf-8"))
     assert "metros_carro_rastrojo" not in calcular_metricas(trace)
+
+
+def test_carro_no_encierra_a_la_cosechadora_que_se_traslada():
+    """Regresión (M1): con despacho temprano, el carro contratado llegaba mientras la cosechadora rodeaba la
+    arboleda y se estacionaba en la única salida sin cultivo; ella no se llenaba y él no se movía hasta la
+    transferencia (atasco hasta max_ticks). Ahora el carro no se detiene en `mundo.paso_de`."""
+    from harvest_sim.aprendizaje import Despachador
+    from harvest_sim.simulacion import ejecutar
+    base = json.loads((RAIZ / "config" / "escenario_g.json").read_text(encoding="utf-8"))
+    base["mapa"] = str((RAIZ / "config" / "mapas" / "el_pueblito.json").resolve())
+    config = {**aplicar_estrategia(base, "qlearning"), "seed": 1001, "max_ticks": 4000}
+    ruta = RAIZ / "runs" / "pruebas" / "g_explorando.json"
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(json.dumps(config), encoding="utf-8")
+    logging.disable(logging.WARNING)
+    trace = ejecutar(cargar_config(ruta), Despachador("qlearning", {"epsilon": 0.3}, aprender=True, semilla=1001))
+    logging.disable(logging.NOTSET)
+    m = trace["metricas"]
+    assert m["porcentaje_entregado"] == 100.0 and m["colisiones"] == 0

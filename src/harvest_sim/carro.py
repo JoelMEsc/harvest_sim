@@ -383,15 +383,30 @@ class Carro:
             self.estado = EstadoCarro.ESPERANDO_TRANSFERENCIA
             return
 
+        # Mientras la cosechadora se traslada (rodea un obstáculo o cambia de lote), el carro no se estaciona
+        # en las celdas que ella necesita (mundo.paso_de): en un pasillo de una celda la dejaba encerrada para
+        # siempre (ella no se llena y el carro solo se mueve después de la transferencia).
+        paso = self._paso_de(mundo, cosechadora)
         objetivo = rutas.elegir_celda_objetivo(
             self.posicion,
             pos_cosechadora,
             mundo.ancho,
             mundo.alto,
             bloqueadas=self._ocupadas_para_objetivo(mundo) | {mundo.bodega} | self._obstaculos(mundo)
-            | self._bloqueadas(mundo),
+            | self._bloqueadas(mundo) | paso,
             evitar=self._siguiente_del_camino(mundo, cosechadora, pos_cosechadora),
         )
+        if objetivo is None and paso:
+            # no hay dónde esperar junto a ella sin estorbar: se hace a un lado si estorba, o espera donde está
+            self.estado = EstadoCarro.YENDO_A_COSECHADORA
+            if self.posicion in paso:
+                libres = sorted(v for v in mundo.vecinos(self.posicion)
+                                if v not in paso and v not in self._ocupadas_para_objetivo(mundo) | {mundo.bodega}
+                                | self._obstaculos(mundo) | self._bloqueadas(mundo))
+                if libres:
+                    self.objetivo = self._destino = libres[0]
+                    self._avanzar(tick, mundo)
+            return
         if objetivo is None:
             # Ninguna vecina libre por ahora (otros agentes alrededor): espera cerca.
             self.estado = EstadoCarro.YENDO_A_COSECHADORA
@@ -942,6 +957,12 @@ class Carro:
     def _reserva(self, mundo: Mundo) -> float:
         combustible = getattr(getattr(mundo, "config", None), "combustible", None) or {}
         return combustible.get("reserva", RESERVA_POR_DEFECTO)
+
+    @staticmethod
+    def _paso_de(mundo: Mundo, cosechadora: str) -> set[Celda]:
+        """Lo que la cosechadora necesita libre para su traslado (mundo.paso_de); vacío en mundos de prueba."""
+        paso_de = getattr(mundo, "paso_de", None)
+        return paso_de(cosechadora) if callable(paso_de) else set()
 
     @staticmethod
     def _siguiente_del_camino(mundo: Mundo, cosechadora: str, celda: Celda) -> set[Celda]:

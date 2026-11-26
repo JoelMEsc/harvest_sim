@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from dataclasses import asdict
 
+from .aprendizaje import despachador_de
 from .config import Config
 from .mundo import Mundo
 from .cosechadora import Cosechadora
@@ -21,10 +22,18 @@ from .datos.formato import COSECHADORA, CARRO, FIN, EN_BASE
 registrador = logging.getLogger("harvest_sim.simulacion")
 
 
-def ejecutar(config: Config) -> dict:
-    """Ejecuta una simulación completa y devuelve su trace con métricas."""
+def ejecutar(config: Config, despachador=None) -> dict:
+    """Ejecuta una simulación completa y devuelve su trace con métricas.
+
+    `despachador` (M1): la tabla Q que decide cuándo pedir carro; si no se da y `politica.aviso` es
+    qlearning o sarsa, se carga la tabla entrenada (sin aprender). Al entrenar se pasa uno que aprende."""
 
     mundo = Mundo(config)
+    if despachador is None:
+        despachador = despachador_de(config)
+    mundo.despachador = despachador
+    if despachador is not None:
+        despachador.nuevo_episodio()
     retraso = config.incertidumbre["retraso_mensajes"]
     buzon = Buzon(mundo.azar("mensajes"), retraso["probabilidad"], retraso["maximo"])
 
@@ -104,6 +113,9 @@ def ejecutar(config: Config) -> dict:
                     agente.posicion,
                 )
 
+        if despachador is not None:
+            despachador.tick(cosechadoras)
+
         # combustible: consumo y recarga después de que todos actuaron (spec §9)
         for agente in agentes:
             mundo.actualizar_combustible(agente, agente.posicion != inicio[agente.agent_id],
@@ -161,6 +173,9 @@ def ejecutar(config: Config) -> dict:
         )
         registrador.error("t=%03d | %s", config.max_ticks, mensaje)
         raise RuntimeError(mensaje)
+
+    if despachador is not None:
+        despachador.terminar()
 
     # construir el trace y calcular las métricas desde sus eventos
     trace = constructor.construir()

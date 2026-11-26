@@ -1,0 +1,9 @@
+{
+  "nombre": "m1_despacho",
+  "descripcion": "Mejora M1: despacho aprendido (Q-learning y SARSA tabulares) contra el umbral fijo (anticipada) y la subasta, en D y G, con las seeds 0 a 19 (el entrenamiento usó las 1000 en adelante). Comparación pareada contra anticipada, que es la misma política salvo el aviso.",
+  "escenarios": ["config/escenario_d.json", "config/escenario_g.json"],
+  "estrategias": ["subasta", "anticipada", "qlearning", "sarsa"],
+  "referencia": "anticipada",
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_ocioso_total"
+}

@@ -44,13 +44,26 @@ ESTRATEGIAS = {
 }
 
 
+# M1 (docs/especificacion_mejoras.md): el aviso lo decide una tabla aprendida (Q-learning o SARSA) en vez del
+# umbral fijo; lo demás es la estrategia anticipada (subasta, sin atender desde la bodega ni encadenar), así
+# que la comparación pareada contra "anticipada" aísla lo que aporta el aprendizaje. El umbral 0.7 queda
+# como respaldo en los estados que la tabla no conoce. Necesitan la tabla entrenada
+# (tools/entrenar_despacho.py); por eso no están en ESTRATEGIAS, que corre en cualquier escenario.
+ESTRATEGIAS_APRENDIDAS = {
+    algoritmo: {"politica": {"asignacion": "subasta", "umbral_aviso": 0.7, "atender_desde_bodega": False,
+                             "encadenar_servicios": False, "aviso": algoritmo}}
+    for algoritmo in ("qlearning", "sarsa")
+}
+TODAS_LAS_ESTRATEGIAS = {**ESTRATEGIAS, **ESTRATEGIAS_APRENDIDAS}
+
+
 def aplicar_estrategia(config: dict, estrategia: str) -> dict:
     """Copia de `config` con la estrategia aplicada: mezcla cada sección de la estrategia sobre la de la
     configuración (las claves que la estrategia no menciona se conservan). Error claro si no existe."""
-    if estrategia not in ESTRATEGIAS:
-        raise ValueError(f"estrategia {estrategia!r} no es una de {list(ESTRATEGIAS)}")
+    if estrategia not in TODAS_LAS_ESTRATEGIAS:
+        raise ValueError(f"estrategia {estrategia!r} no es una de {list(TODAS_LAS_ESTRATEGIAS)}")
     nueva = dict(config)
-    for seccion, cambios in ESTRATEGIAS[estrategia].items():
+    for seccion, cambios in TODAS_LAS_ESTRATEGIAS[estrategia].items():
         nueva[seccion] = {**(config.get(seccion) or {}), **cambios}
     return nueva
 

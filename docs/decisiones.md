@@ -250,3 +250,24 @@ Formato por entrada:
 - **Alternativa considerada:** que Unity calcule las pasadas con `PasadasCultivo.cs`; un rectángulo con el área del predio; caminos rasterizados por área; la bodega sobre el camino.
 - **Por qué se descartó:** habría dos fuentes de verdad; se perdería la forma, que es justo lo que se quiere estudiar; un camino de 4 m nunca ocupa la mitad de una celda de 12 m y la red quedaría partida; una máquina estacionada sobre un camino de una celda lo tapa para siempre.
 - **Afecta a:** todos. Detalle en `docs/especificacion_terreno.md`.
+
+## 2026-11-26 — M1: despacho aprendido y carro que no encierra a la cosechadora en traslado
+- **Estado:** DECIDIDO.
+- **Quién:** Joel (Datos). La regla 2 toca el carro y la cosechadora (Oswaldo y Emilio): se avisa en el PR.
+- **Decisión:**
+  1. **M1 entra como `politica.aviso`** (`umbral` por defecto, `qlearning` o `sarsa`). Solo funciona con subasta, porque usa `SOLICITUD_SERVICIO`.
+     - La tabla Q se entrena aparte (`tools/entrenar_despacho.py`, seeds 1000 y siguientes) y se versiona en `config/aprendizaje/`.
+     - La simulación solo la lee: sin exploración y con el umbral como respaldo en los estados que no conoce.
+     - Las estrategias `qlearning` y `sarsa` son `anticipada` con el aviso aprendido. Van en `ESTRATEGIAS_APRENDIDAS`, no en `ESTRATEGIAS`, porque necesitan tabla por escenario.
+  2. **El carro no se estaciona en el paso de una cosechadora que se traslada** (`mundo.paso_de`: su destino y los dos siguientes pasos de la ruta que respeta R13).
+     - Si no hay otra vecina libre, el carro se hace a un lado o espera donde está.
+     - Explorando en G, un carro llegaba temprano mientras la cosechadora rodeaba la arboleda y se quedaba en la única salida sin cultivo. Ella no se llenaba y él solo se mueve después de la transferencia, así que la corrida llegaba a `max_ticks`.
+     - Con las estrategias fijas no se había visto, pero el mismo atasco podía pasar con cualquier aviso temprano.
+     - A–G dan exactamente las mismas métricas que antes (D, E, F y G comprobados).
+  3. **`comparar_contra_base` acepta otra referencia** (`"referencia"` en el JSON del experimento). M1 se compara contra `anticipada`, que es la misma política salvo el aviso.
+- **Alternativa considerada:** una tabla única para todos los escenarios; aprender durante las corridas de evaluación; que la cosechadora cruce el cultivo cuando el carro le estorba.
+- **Por qué se descartó:**
+  - La tabla única mezcla campos donde el aviso importa de forma muy distinta: en D casi nada, en G mucho.
+  - Aprender durante la evaluación rompe la reproducibilidad: la seed dejaría de determinar el trace.
+  - Cruzar el cultivo rompe el espíritu de R13 por una falla de coordinación.
+- **Afecta a:** Oswaldo (`carro._acompanar`), Emilio (`cosechadora.celdas_de_paso`), Ilan (prueba de regresión en `test_terreno_integracion.py`). Detalle en `docs/especificacion_mejoras.md` §M1.
