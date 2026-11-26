@@ -1,10 +1,14 @@
-# harvest_sim — Línea base reactiva de cosecha multiagente (2D)
+# harvest_sim — Cosecha multiagente: cosechadoras, carros y el campo real
 
 Reto agrícola multiagente con John Deere · Equipo 3 · TC2008B.
 
 **Carpeta de Drive con evidencias:** [Google Drive](https://drive.google.com/drive/folders/1XX1WP433XIvwLuCjnjkFnRm9IYrBwJON?usp=sharing)
 
-Una **cosechadora** recorre un campo en cuadrícula en serpentina. Cuando se llena, le manda un mensaje al **carro recolector**, que va hasta ella, recibe el grano y lo lleva a la **bodega**. El tiempo que la cosechadora pasa llena esperando al carro es el **tiempo ocioso**, la métrica principal del reto. Esta versión es la **línea base reactiva** (el carro sale solo cuando la cosechadora ya está llena), contra la que se compararán las mejoras de coordinación.
+Las **cosechadoras** recorren un campo en cuadrícula en serpentina. Cuando una se llena (o está por llenarse), pide un **carro recolector**, que va hasta ella, recibe el grano y lo lleva a la **bodega**. El tiempo que la cosechadora pasa llena esperando al carro es el **tiempo ocioso**, la métrica principal del reto.
+
+- **Línea base reactiva** (primera entrega): el carro sale solo cuando la cosechadora ya está llena.
+- **Estrategias de coordinación** (segunda entrega): subasta Contract Net y despacho anticipado.
+- **Campo real** (escenario G): El Pueblito, con su forma, caminos y relieve sacados del KML y del DEM.
 
 La simulación está escrita en Python y produce un log por corrida (`trace.json`). El visor, las métricas, las gráficas, los experimentos y el dashboard **solo leen ese archivo**: la simulación es la única fuente de verdad.
 
@@ -24,10 +28,10 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 pip install -e .
 
-bash scripts/correr_todos.sh     # simula A–F, valida, grafica, corre los experimentos y arma el dashboard
+bash scripts/correr_todos.sh     # simula A–G, valida, grafica, corre los experimentos (incluido G) y arma el dashboard
 ```
 
-Al terminar, abre **`runs/dashboard.html`** en el navegador: junta el entorno, los indicadores y los experimentos en una sola página.
+Al terminar, abre **`runs/dashboard.html`** en el navegador: junta el entorno, los indicadores y los experimentos de A–G en una sola página. La corrida completa tarda unos 2.5 minutos con 24 núcleos; casi todo es de los experimentos de 20 seeds, que se reparten entre los núcleos disponibles.
 
 Para comprobar que todo funciona desde cero en una carpeta limpia (crea un entorno virtual temporal, instala, corre `pytest` y `correr_todos.sh`):
 
@@ -37,10 +41,11 @@ bash scripts/verificar_instalacion.sh
 
 La simulación es **reproducible**: el mismo escenario con la misma `seed` produce siempre el mismo `trace.json`, byte a byte. Para Unity, levanta el servidor con `bash scripts/servidor.sh` (http://127.0.0.1:8000, documentación en `/docs`).
 
-Otras formas de correr la segunda entrega:
+Otras formas de correr las estrategias y el campo real:
 
 ```bash
 python -m harvest_sim.cli config/escenario_e.json --estrategia anticipada_plus --seed 3
+python -m harvest_sim.cli config/escenario_g.json --estrategia anticipada_plus               # campo real (trace 2.3), ~25 s
 python tools/correr_experimento.py config/experimentos/estrategias.json --procesos 8   # D, E, F × 4 estrategias × 20 seeds
 python tools/correr_experimento.py config/experimentos/terreno_g_estrategias.json --procesos 8   # G (campo real) × 4 estrategias × 20 seeds
 python tools/verificar_terreno.py                                                       # reglas R10, R12 y R13 en G desde el trace
@@ -55,7 +60,7 @@ python tools/kml_a_mapa.py --figura                                             
 
 **Segunda entrega** (detalle, IC 95 % y figuras en [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md)): en D y E, atender desde la bodega y encadenar servicios (`anticipada_plus`) baja el ocio de las cosechadoras entre 36 % y 40 % y el costo J entre 31 % y 36 %; el umbral de aviso por sí solo apenas cambia el ocio (−1 %); la capacidad del carro solo importa cuando la política la usa; y en F (combustible escaso e incertidumbre) la línea base le gana a la subasta. 640 corridas sin colisiones ni bloqueos.
 
-**Línea base (primera entrega).** Con los tres escenarios de `config/` (generados con `bash scripts/correr_todos.sh`; la tabla completa queda en `runs/comparacion/resumen.md`):
+**Línea base (primera entrega).** Con los escenarios A, B y C (generados con `bash scripts/correr_todos.sh`; la tabla completa queda en `runs/comparacion/resumen.md`):
 
 | Escenario | Campo | Capacidad cosechadora / carro | Tasas (transferencia / descarga) | Completación (ticks) | Tiempo ocioso (ticks) | % ocioso | Ciclos | Colisiones | Grano entregado |
 |---|---|---|---|---|---|---|---|---|---|
@@ -74,10 +79,10 @@ config/escenario_X.json
         │
         ▼
 python -m harvest_sim.cli ──► simulacion.ejecutar
-                                 ├─ Mundo (grid, bodega, bases, grano, eventos)
+                                 ├─ Mundo (grid o mapa real, bodega, bases, zonas, grano, combustible)
                                  ├─ Cosechadora y Carro (máquinas de estados)
-                                 ├─ rutas.py (BFS y conflictos de celda)
-                                 └─ Buzon (mensajes LLENA / TRANSFERENCIA_TERMINADA)
+                                 ├─ rutas.py (BFS y rutas en el tiempo con reservas)
+                                 └─ Buzon (LLENA, subasta Contract Net, TRANSFERENCIA_TERMINADA)
                                  │
                                  ▼  TraceBuilder (harvest_sim/datos)
                        runs/escenario_X/trace.json   ◄── único contrato entre módulos
@@ -88,10 +93,13 @@ python -m harvest_sim.cli ──► simulacion.ejecutar
 ```
 
 - **Cada tick:** se entregan los mensajes del tick anterior, actúa la cosechadora, actúa el carro y se registra lo que cambió. Un mensaje enviado en `t` se lee en `t+1`.
-- **El log (formato 2.1)** guarda solo cambios: posición, estado y carga de cada agente, celdas cosechadas, depósitos, bloqueos y mensajes (con su acto comunicativo: `LLENA` es una petición y `TRANSFERENCIA_TERMINADA` un aviso). Cada tick lleva un checksum.
-- **Reglas físicas R1–R9** (dentro del mapa, un paso por tick, nunca dos agentes en la misma celda, transferencia solo entre vecinos, conservación del grano, etc.): las verifican las pruebas de mundo y de integración en cada tick de las corridas reales.
+- **El log** guarda solo cambios: posición, estado, carga y combustible de cada agente, celdas cosechadas, depósitos, bloqueos, restricciones y mensajes, cada uno con su acto comunicativo (`LLENA` es una petición, `PROPUESTA` una oferta, `TRANSFERENCIA_TERMINADA` un aviso). Cada tick lleva un checksum.
+  - A–F escriben el formato **2.2**.
+  - G, que trae mapa, escribe el **2.3**: caminos, fuera de campo, lotes, relieve y formas reales.
+  - El validador acepta 2.1, 2.2 y 2.3.
+- **Reglas R1–R13.** Dentro del mapa, un paso por tick, nunca dos agentes en la misma celda, transferencia solo entre vecinos, conservación del grano, obstáculos (R10), combustible nunca negativo (R11), nadie fuera del predio (R12) y carros fuera del cultivo en pie (R13). Las pruebas de mundo y de integración las verifican en cada tick de las corridas reales.
 
-El detalle está en la [especificación](docs/especificacion_primera_entrega.md) y en [`docs/ontologia.md`](docs/ontologia.md).
+El detalle está en las especificaciones ([primera entrega](docs/especificacion_primera_entrega.md), [segunda entrega](docs/especificacion_segunda_entrega.md) y [terreno](docs/especificacion_terreno.md)) y en [`docs/ontologia.md`](docs/ontologia.md).
 
 ---
 
@@ -104,6 +112,7 @@ python -m harvest_sim.cli config/escenario_a.json                 # runs/escenar
 python -m harvest_sim.cli config/escenario_a.json --sin-plots     # solo el trace
 python -m harvest_sim.cli config/escenario_a.json --silencioso    # sin el log de consola (--detallado: todo)
 python -m harvest_sim.cli config/escenario_a.json --salida otra/carpeta
+python -m harvest_sim.cli config/escenario_g.json --estrategia anticipada --seed 0   # campo real; también --estrategia base, subasta, anticipada_plus
 ```
 
 En la consola se imprime lo que pasa (cambios de estado, mensajes y depósitos), por ejemplo `t=013 | MSG #1 LLENA cosechadora_1 -> carro_1 {x: 6, y: 2, carga: 10} (se entrega en t=014)`. Si algo falla, la CLI termina con código 1 y el error en `stderr`.
@@ -113,14 +122,17 @@ En la consola se imprime lo que pasa (cambios de estado, mensajes y depósitos),
 ```bash
 python viz/viewer.py runs/escenario_a/trace.json
 python viz/viewer.py runs/escenario_a/trace.json --guardar-cuadros runs/escenario_a/cuadros --cada 10   # PNG sin ventana
+python viz/viewer.py runs/escenario_g/trace.json      # campo real: caminos, fuera del predio y obstáculos del mapa
 ```
+
+El campo real en 3D (relieve, caminos y contornos de los lotes) se ve en Unity: [`harvest-simu-visualization`](https://github.com/GioMax102/harvest-simu-visualization). Para pasarle traces, usa `python tools/exportar_traces_unity.py <Assets/Data/Traces>`, que corre todos los escenarios de `config/` (incluido G), los valida y los copia.
 
 Controles: `Espacio` pausa y reanuda, flechas avanzan o retroceden un tick, `Inicio` / `Fin` van a los extremos, `+` / `-` cambian la velocidad, `Esc` sale.
 
 ### Dashboard
 
 ```bash
-python viz/dashboard.py runs/escenario_a runs/escenario_b runs/escenario_c --salida runs/dashboard.html
+python viz/dashboard.py runs/escenario_{a,b,c,d,e,f,g} --salida runs/dashboard.html
 ```
 
 Tres paneles: **entorno** (cuadros del visor), **indicadores** (métricas y gráficas de cada escenario) y **experimental** (parámetros de cada escenario, comparación, tabla, mapas de calor y sensibilidad). Las imágenes van incrustadas, así que el HTML se puede compartir solo. Lee resultados ya generados: corre antes la simulación, `viz/plots.py`, el experimento y el visor con `--guardar-cuadros` (o simplemente `scripts/correr_todos.sh`).
@@ -138,7 +150,10 @@ Imprime `OK` o cada error con el tick, el evento y el campo (por ejemplo, `tick 
 ```bash
 python viz/plots.py runs/escenario_a/trace.json runs/escenario_b/trace.json runs/escenario_c/trace.json
 python viz/plots.py runs/escenario_a/trace.json --agente cosechadora_1     # una cosechadora en vez del promedio
+python viz/plots.py runs/escenario_g/trace.json --sin-comparacion          # solo las gráficas del trace, sin tocar runs/comparacion
 ```
+
+La comparación entre escenarios acepta hasta 6 (A–F). G dura unas 10 veces más, así que `correr_todos.sh` le hace solo sus gráficas propias.
 
 | Archivo | Pregunta que responde |
 |---|---|
@@ -146,6 +161,7 @@ python viz/plots.py runs/escenario_a/trace.json --agente cosechadora_1     # una
 | `2_ocioso_acumulado.png` | ¿Cuánto ha esperado la cosechadora hasta ahora? |
 | `3_distancia_cosechadora_carro.png` | ¿Qué tan lejos está el carro? |
 | `4_flujo_del_grano.png` | ¿Cuánto grano llegó a la bodega y cuánto va en camino? |
+| `7_combustible.png` | ¿Cuánto combustible le queda a cada agente? (solo traces 2.2 y 2.3) |
 | `5_mapa_espera.png`, `6_mapa_trafico.png` | ¿Dónde espera la cosechadora? ¿Por dónde pasan los agentes? |
 | `runs/comparacion/comparacion_escenarios.png` | ¿Cómo se comparan los escenarios (6 indicadores)? |
 | `runs/comparacion/resumen.csv`, `resumen.md` | Todas las métricas (CSV) y las principales (Markdown) |
@@ -154,9 +170,33 @@ python viz/plots.py runs/escenario_a/trace.json --agente cosechadora_1     # una
 
 ```bash
 python tools/correr_experimento.py config/experimentos/tasa_transferencia.json
+python tools/correr_experimento.py config/experimentos/estrategias.json --procesos 8
 ```
 
-Un experimento es un JSON en `config/experimentos/` con los escenarios, el barrido (`{"parámetro": [valores]}`), las repeticiones y la métrica a graficar. Escribe en `runs/experimentos/<nombre>/`: `resultados.csv` (una fila por corrida), `resumen.csv` (media, desviación estándar e intervalo de confianza del 95 %) y `sensibilidad_<parámetro>.png`. Como la simulación es determinista, las repeticiones dan lo mismo y el resumen lo indica («sin variación»).
+| Experimento | Qué compara |
+|---|---|
+| `tasa_transferencia.json` | A, B y C con tasas de transferencia de 1 a 5 (primera entrega) |
+| `estrategias.json` | D, E y F × 4 estrategias × 20 seeds (principal de la segunda entrega) |
+| `estrategias_incertidumbre.json` | D con incertidumbre × 4 estrategias × 20 seeds |
+| `umbral_aviso.json`, `capacidad_carro.json` | Umbral de aviso y capacidad del carro en D |
+| `terreno_g_estrategias.json` | G (campo real) × 4 estrategias × 20 seeds |
+| `terreno_g_pendiente.json` | G con el factor de pendiente de 0 a 8 |
+| `terreno_g_r13.json` | G con R13 contra G sin R13 (compactación del suelo) |
+
+Un experimento es un JSON en `config/experimentos/` con estos campos:
+- los escenarios;
+- las estrategias (opcional);
+- el barrido, `{"parámetro": [valores]}`; una clave con punto entra a una sección, como `"politica.respetar_cultivo"`;
+- las seeds o las repeticiones;
+- la métrica a graficar.
+
+Escribe en `runs/experimentos/<nombre>/`:
+- `resultados.csv`: una fila por corrida;
+- `resumen.csv`: media, desviación estándar e intervalo de confianza del 95 %;
+- con estrategias, `comparacion.csv` (pareada contra `base`) y `ablacion.csv` (costo J);
+- las gráficas de sensibilidad y de estrategias.
+
+Sin incertidumbre (A–E y G), todas las seeds dan lo mismo y el resumen lo indica («sin variación»).
 
 ### Datos de ejemplo (sin la simulación)
 
@@ -199,18 +239,31 @@ Cada escenario es un JSON en `config/` (nada de valores fijos en el código):
 }
 ```
 
-- La fila `y = 0` es de servicio: bodega en `(0, 0)` y las bases de los agentes; el campo son las filas `y ≥ 1`.
-- Las tasas son unidades de grano por tick: transferir o descargar `q` unidades dura `ceil(q / tasa)` ticks.
-- `cargar_config` valida todo y falla con un mensaje claro (capacidades, ancho mínimo, enteros positivos…).
-- Por ahora se acepta **una** cosechadora y **un** carro, y los obstáculos se validan pero deben ir vacíos (la simulación aún no los recorre). Las métricas y gráficas ya funcionan con cualquier número de agentes.
+- **Sin mapa (A–F):**
+  - la fila `y = 0` es de servicio: bodega en `(0, 0)` y las bases de los agentes;
+  - el campo son las filas `y ≥ 1`, menos los obstáculos (`celdas` y `regiones`).
+- **Con mapa (G):**
+  - `"mapa": "mapas/el_pueblito.json"` trae el tamaño, los obstáculos, los caminos, la bodega, las bases y el relieve;
+  - el escenario solo fija los agentes, las capacidades, las tasas y la política (ver `config/escenario_g.json`).
+- **Agentes:** cualquier número de cosechadoras y carros (`num_cosechadoras`, `num_carros`); cada cosechadora cosecha su franja o zona.
+- **Tasas:** son unidades de grano por tick; transferir o descargar `q` unidades dura `ceil(q / tasa)` ticks.
+- **Secciones opcionales.** Cada una tiene valores por defecto que reproducen la línea base:
+  - `politica`: `asignacion` directa o subasta, `umbral_aviso`, `atender_desde_bodega`, `encadenar_servicios`, `respetar_cultivo`;
+  - `incertidumbre`: rendimiento por celda, duración extra y retraso de mensajes;
+  - `combustible`: tanques, consumos, reserva, recarga y `factor_pendiente`;
+  - `costo`: los pesos de J.
+- **Estrategias:** `--estrategia` en la CLI aplica una de las 4 (`base`, `subasta`, `anticipada`, `anticipada_plus`) sobre la política.
+- **Validación:** `cargar_config` valida todo y falla con un mensaje claro (capacidades, ancho mínimo, enteros positivos, mapa coherente con el escenario…).
 
 ---
 
 ## Pruebas y CI
 
 ```bash
-pytest                                                    # 650 pruebas
+pytest                                                    # 713 pruebas
 pytest tests/test_integracion.py                          # corridas completas de A–F (y D, E, F con las 4 estrategias)
+pytest tests/test_terreno_integracion.py                  # G completo: R10, R12, R13 y compactación del suelo
+python tools/verificar_terreno.py                         # G × 4 estrategias × 20 seeds (~3 min), revisado desde el trace
 pytest tests/test_regresion.py                            # A, B y C contra las métricas de v0.1
 pytest tests/test_mundo.py::test_serpentina_cubre_todo_el_campo
 ```
@@ -223,7 +276,10 @@ pytest tests/test_mundo.py::test_serpentina_cubre_todo_el_campo
 | `test_regresion.py` | A, B y C dan las métricas guardadas de `v0.1-entrega1` |
 | `test_cosechadora_subasta.py`, `test_servidor.py` | Cosechadora administradora de la subasta y servidor FastAPI |
 | `test_trace.py`, `test_metricas.py`, `test_campo.py`, `test_validador.py`, `test_generador.py`, `test_experimentos.py`, `test_plots.py` | Log, métricas, campo, validador, experimentos y gráficas |
-| `test_viewer.py`, `test_dashboard.py` | Visor y dashboard sin ventana |
+| `test_viewer.py`, `test_dashboard.py` | Visor (2.1, 2.2 y 2.3) y dashboard sin ventana |
+| `test_formato_23.py`, `test_mapa.py`, `test_relieve.py` | Trace 2.3, conversión del KML al mapa (área, caminos soldados, red conectada) y relieve del DEM |
+| `test_mundo_mapa.py`, `test_terreno_integracion.py` | Mundo con mapa (R12, R13, zonas, bodega y bases del mapa) y corrida completa de G |
+| `test_exportar_unity.py` | Exportación de traces para Unity |
 
 GitHub Actions (`.github/workflows/ci.yml`) corre `pytest` con Python 3.12 en cada push y pull request a `main`, `development` y las ramas personales.
 
@@ -232,7 +288,7 @@ GitHub Actions (`.github/workflows/ci.yml`) corre `pytest` con Python 3.12 en ca
 ## Estructura del repositorio
 
 ```
-config/                  escenarios A, B y C; experimentos en config/experimentos/
+config/                  escenarios A–G; experimentos en config/experimentos/; mapas reales en config/mapas/ (KML, JSON y DEM)
 src/harvest_sim/
 ├── config.py            carga y validación de la configuración
 ├── mundo.py             grid, bodega, bases, serpentina, grano y eventos del mundo
@@ -240,14 +296,18 @@ src/harvest_sim/
 ├── mensajes.py          tipos de mensaje y buzón
 ├── cosechadora.py       máquina de estados de la cosechadora
 ├── carro.py             máquina de estados del carro
+├── agente.py            base común de los agentes
 ├── simulacion.py        bucle de ticks y armado del trace
 ├── cli.py               python -m harvest_sim.cli
-├── datos/               formato del log, métricas, campo, validador y experimentos
+├── servidor.py          API FastAPI para Unity (scripts/servidor.sh)
+├── mapa/                KML a mapa: kml.py, pasadas.py, convertir.py y relieve.py (DEM)
+├── datos/               formato del log (2.1–2.3), métricas, campo, validador, tablas y experimentos
 └── telemetria.py        acceso de compatibilidad a datos/
 viz/                     viewer.py (visor 2D), plots.py (gráficas), dashboard.py (dashboard HTML)
-tools/                   validar_trace.py, correr_experimento.py, generar_trace_ejemplo.py
-scripts/                 correr_todos.sh, verificar_instalacion.sh
-tests/                   pruebas; tests/fixtures/ con el log de ejemplo
+tools/                   validar_trace.py, correr_experimento.py, verificar_terreno.py, kml_a_mapa.py,
+                         exportar_traces_unity.py, generar_trace_ejemplo.py, traces_ejemplo_22.py, traces_ejemplo_23.py
+scripts/                 correr_todos.sh, verificar_instalacion.sh, servidor.sh
+tests/                   pruebas; tests/fixtures/ con los logs de ejemplo (2.1, 2.2 y 2.3)
 docs/                    documentación (ver abajo)
 runs/                    salidas de las corridas (no se versionan)
 ```

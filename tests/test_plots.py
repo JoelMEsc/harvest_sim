@@ -187,3 +187,12 @@ def test_graficas_de_estrategias(plots, tmp_path):
     assert es_png(plots.grafica_estrategias(resumen, tmp_path / "estrategias.png"))
     assert es_png(plots.grafica_costo_j(filas, tmp_path / "costo.png"))
     assert es_png(plots.grafica_diferencias(comparar_contra_base(filas), tmp_path / "dif.png"))
+
+
+def test_main_sin_comparacion_solo_graficas_del_trace(plots, tmp_path):
+    """G (campo real) se grafica solo, sin tocar la comparación de A–F (scripts/correr_todos.sh)."""
+    ruta = tmp_path / "entrada" / "escenario_g" / "trace.json"
+    escribir_trace(cargar_trace(Path(__file__).parent / "fixtures" / "trace_ejemplo_23.json"), ruta)
+    assert plots.main([str(ruta), "--salida", str(tmp_path / "salida"), "--sin-comparacion"]) == 0
+    assert any((tmp_path / "salida").rglob("6_mapa_trafico.png"))
+    assert not (tmp_path / "salida" / "comparacion").exists()

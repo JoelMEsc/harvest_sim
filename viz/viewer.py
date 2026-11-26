@@ -1,4 +1,6 @@
-"""Visor independiente de los traces 2.1 y 2.2; no importa la simulación.
+"""Visor independiente de los traces 2.1, 2.2 y 2.3; no importa la simulación.
+
+Con mapa (2.3) dibuja los caminos y deja en blanco lo que está fuera del predio; sin mapa, la fila 0 es de servicio.
 
 Espacio: pausa; flechas: paso; Inicio/Fin: extremos; +/-: velocidad.
 --guardar-cuadros exporta PNG sin ventana cada --cada ticks, incluido el final.
@@ -20,6 +22,9 @@ FONDO = "#f5f3e9"
 TEXTO = "#20372d"
 CULTIVO = "#dbbd57"
 COSECHADO = "#e6e4d6"
+SERVICIO = "#cdd8dc"
+CAMINO = "#b49a72"
+FUERA = "#fbfaf4"
 class Reproductor:
     """Conserva el estado entre ticks dispersos; retroceder reconstruye desde 0."""
 
@@ -99,7 +104,7 @@ def dibujar(rep, velocidad=8, pausa=True):
     for e in rep.eventos:
         lineas.extend(textwrap.wrap(f"{e['tipo']} · {e['agente']} · {e.get('regla', e.get('nivel', ''))} {e.get('detalle', '')}", 43))
     lineas = lineas or ["Sin mensajes ni alertas en este tick."]
-    superficie = pygame.Surface((panel_x + 420, max(620, mapa_h + 280, my + 70 + len(lineas) * 23)))
+    superficie = pygame.Surface((panel_x + 420, max(620, mapa_h + 310, my + 70 + len(lineas) * 23)))
     superficie.fill(FONDO)
     fuente = pygame.font.Font(None, 23)
     titulo = pygame.font.Font(None, 35)
@@ -115,13 +120,18 @@ def dibujar(rep, velocidad=8, pausa=True):
     texto(f"Tick {rep.tick} / {rep.total}   ·   {'Pausa' if pausa else 'Reproduciendo'}   ·   {velocidad:g} ticks/s", 28, 90)
     obstaculos = {tuple(p) for p in mundo.get("obstaculos", [])}
     bases = {tuple(p) for p in mundo["bases"].values()}
+    con_mapa = any(k in mundo for k in ("caminos", "fuera_de_campo", "lotes"))
+    caminos = {tuple(p) for p in mundo.get("caminos", [])}
+    fuera = {tuple(p) for p in mundo.get("fuera_de_campo", [])}
     rendimiento = mundo.get("rendimiento")
     maximo = max((max(fila) for fila in rendimiento), default=0) if rendimiento else 0
     for y in range(alto):
         for x in range(ancho):
             pos = (x, y)
-            color = "#cdd8dc" if y == 0 else COSECHADO if pos in rep.cosechadas else CULTIVO
-            if y and pos not in rep.cosechadas and rendimiento and maximo:
+            servicio = pos in caminos if con_mapa else y == 0
+            color = (FUERA if pos in fuera else CAMINO if servicio and con_mapa else SERVICIO if servicio
+                     else COSECHADO if pos in rep.cosechadas else CULTIVO)
+            if not servicio and pos not in fuera and pos not in rep.cosechadas and rendimiento and maximo:
                 color = pygame.Color(CULTIVO).lerp(pygame.Color("#a87917"), rendimiento[y][x] / maximo * .65)
             rect = pygame.Rect(28 + x * celda, 120 + y * celda, celda, celda)
             pygame.draw.rect(superficie, color, rect)
@@ -130,7 +140,8 @@ def dibujar(rep, velocidad=8, pausa=True):
                 pygame.draw.rect(superficie, "#617b86", rect.inflate(-4, -4), 2)
             if pos == tuple(mundo["bodega"]):
                 pygame.draw.rect(superficie, TEXTO, rect.inflate(-4, -4))
-                superficie.blit(fuente.render("B", True, "white"), rect.move(6, 5))
+                if celda >= 16:
+                    superficie.blit(fuente.render("B", True, "white"), rect.move(6, 5))
             if pos in obstaculos:
                 pygame.draw.rect(superficie, "#6a6c68", rect.inflate(-2, -2))
                 pygame.draw.line(superficie, "white", rect.topleft, rect.bottomright, 2)
@@ -172,10 +183,15 @@ def dibujar(rep, velocidad=8, pausa=True):
                 pygame.draw.rect(superficie, color, (panel_x + 180, py + 92, round(180 * min(1, max(0, nivel / tanque))), 8))
     texto(f"Bodega: {rep.entregado} u. de grano", panel_x, 80)
     ly = 140 + mapa_h
-    for i, (color, etiqueta) in enumerate(((CULTIVO, "Por cosechar"), (COSECHADO, "Cosechada"), ("#cdd8dc", "Servicio / bases"), ("#6a6c68", "Obstáculo (X)"))):
+    leyenda = [(CULTIVO, "Por cosechar"), (COSECHADO, "Cosechada"), (SERVICIO, "Servicio / bases"), ("#6a6c68", "Obstáculo (X)")]
+    if con_mapa:
+        leyenda[2] = (CAMINO, "Camino")
+        leyenda += [(FUERA, "Fuera del predio"), (TEXTO, "Bodega")]
+    for i, (color, etiqueta) in enumerate(leyenda):
         x, y = 28 + (i % 2) * 220, ly + (i // 2) * 27
         pygame.draw.rect(superficie, color, (x, y, 14, 14))
         texto(etiqueta, x + 22, y)
+    ly += 27 * ((len(leyenda) + 1) // 2) - 54
     texto("Espacio: pausa   Flechas: paso   Inicio / Fin", 28, ly + 65)
     texto("+ / -: velocidad   Esc: salir   B: bodega", 28, ly + 91)
     texto("Mensajes y alertas del tick", panel_x, my, True)
