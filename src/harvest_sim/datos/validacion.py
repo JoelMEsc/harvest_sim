@@ -9,6 +9,8 @@ from __future__ import annotations
 from .campo import celdas_de_campo, tiene_mapa
 from .formato import (
     ACCIONES_DESPACHO,
+    CAMPOS_MUNDO_24,
+    TRAMOS_TRAYECTORIA,
     CAMPOS_ESTADO_DESPACHO,
     COSECHADORA,
     ORIGENES_DESPACHO,
@@ -56,6 +58,30 @@ def _tiene_tipo(valor, tipo) -> bool:
     if tipo is float:
         return _es_numero(valor)
     return isinstance(valor, tipo)
+
+
+def _validar_hileras(mundo: dict, campo: set | None, error) -> None:
+    """2.4: la cabecera son celdas de campo; cada pasada [x0, y, x1] es un tramo de fila de campo fuera de la
+    cabecera, y cabecera + pasadas cubren el campo sin repetir celdas."""
+    cabecera = mundo.get("cabecera")
+    pasadas = mundo.get("pasadas")
+    if not isinstance(cabecera, list) or not all(_es_celda(c) for c in cabecera):
+        error("mundo: cabecera debe ser una lista de celdas [x, y]")
+        return
+    if not isinstance(pasadas, list) or not all(
+            isinstance(p, list) and len(p) == 3 and all(_es_entero(v) for v in p) and p[0] <= p[2] for p in pasadas):
+        error("mundo: pasadas debe ser una lista de [x0, y, x1] con x0 <= x1")
+        return
+    cab = {tuple(c) for c in cabecera}
+    celdas_pasadas = [(x, p[1]) for p in pasadas for x in range(p[0], p[2] + 1)]
+    if campo is None:
+        return
+    if not cab <= campo or not set(celdas_pasadas) <= campo:
+        error("mundo: la cabecera y las pasadas deben ser celdas de campo")
+    if len(celdas_pasadas) != len(set(celdas_pasadas)) or cab & set(celdas_pasadas):
+        error("mundo: una celda está en dos pasadas o en una pasada y en la cabecera")
+    elif cab | set(celdas_pasadas) != campo:
+        error(f"mundo: cabecera y pasadas no cubren el campo ({len(campo - cab - set(celdas_pasadas))} celdas sin pasada)")
 
 
 def _version(texto) -> tuple[int, ...]:
@@ -213,6 +239,10 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
         if v < (2, 3):
             error(f"mundo: {[c for c in CAMPOS_MUNDO_23 if c in mundo]} requieren schema_version 2.3")
         _validar_mapa(mundo, ancho, alto, campo, con_obstaculo, error)
+    if any(c in mundo for c in CAMPOS_MUNDO_24):
+        if v < (2, 4):
+            error(f"mundo: {[c for c in CAMPOS_MUNDO_24 if c in mundo]} requieren schema_version 2.4")
+        _validar_hileras(mundo, campo, error)
 
     catalogo: dict[str, dict] = {}
     agentes = trace.get("agentes")
@@ -430,6 +460,16 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
                     error(f"{pref}: una decisión forzada es pedir con la tolva llena (tramo 5)")
                 if "q" in e and (sorted(e["q"]) != ["pedir", "seguir"] or not all(_es_numero(x) for x in e["q"].values())):
                     error(f"{pref}: q debe ser {{seguir, pedir}} numéricos")
+
+            elif tipo == "TRAYECTORIA":
+                agente_conocido(pref, e["agente"])
+                if e["tramo"] not in TRAMOS_TRAYECTORIA:
+                    error(f"{pref}: tramo debe ser uno de {list(TRAMOS_TRAYECTORIA)}")
+                if len(e["puntos"]) < 2 or not all(
+                        isinstance(p, list) and len(p) == 3 and all(_es_numero(v) for v in p) for p in e["puntos"]):
+                    error(f"{pref}: puntos debe ser una lista de al menos 2 [x, y, rumbo] numéricos")
+                if e["ticks"] < 1:
+                    error(f"{pref}: ticks debe ser >= 1")
 
             elif tipo == "MENSAJE_ENVIADO":
                 agente_conocido(pref, e["de"], "de")

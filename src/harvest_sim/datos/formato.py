@@ -8,11 +8,14 @@ from __future__ import annotations
 
 SCHEMA_VERSION = "2.2"         # la que se escribe sin mapa (escenarios A-F)
 SCHEMA_VERSION_MAPA = "2.3"    # la que se escribe cuando el mundo trae mapa (forma real, caminos, relieve)
-VERSIONES_ACEPTADAS = ("2.1", "2.2", "2.3")  # cada versión solo agrega campos a la anterior
+SCHEMA_VERSION_HILERAS = "2.4"  # con politica.movimiento = "hileras": cabecera, pasadas y trayectorias de vuelta
+VERSIONES_ACEPTADAS = ("2.1", "2.2", "2.3", "2.4")  # cada versión solo agrega campos a la anterior
 
 # Campos opcionales de `mundo` que agrega el 2.3 (docs/especificacion_terreno.md §6). Si el mundo trae
 # alguno, el trace es 2.3 y el campo cosechable sigue la regla del mapa (datos/campo.py).
 CAMPOS_MUNDO_23 = ("tamano_celda_m", "caminos", "fuera_de_campo", "lotes", "altura_m", "geo")
+# 2.4 (plan de hileras y rutas): celdas de cabecera y pasadas [x0, y, x1] (tramos de fila, hileras a lo largo de x)
+CAMPOS_MUNDO_24 = ("cabecera", "pasadas")
 
 # Claves del primer nivel y de cada tick, en este orden.
 CLAVES_TRACE = ["schema_version", "meta", "config", "mundo", "agentes", "ticks", "metricas"]
@@ -34,6 +37,7 @@ CATEGORIA = {
     "RECARGA": 2,
     "RESTRICCION": 2,
     "DECISION_DESPACHO": 2,
+    "TRAYECTORIA": 2,
     "MENSAJE_ENVIADO": 3,
 }
 
@@ -47,6 +51,9 @@ CAMPOS_EVENTO = {
     "RESTRICCION": {"agente": str, "regla": str, "detalle": str},
     # M1 (docs/especificacion_mejoras.md): una decisión de la tabla aprendida; solo con politica.aviso aprendido.
     "DECISION_DESPACHO": {"agente": str, "estado": dict, "accion": str, "origen": str},
+    # 2.4: la curva (Dubins) de una vuelta de cabecera; puntos [x, y, rumbo] en metros del marco de la cuadrícula
+    # (celda (c, f) centrada en (c·s, f·s); rumbo en radianes, 0 = +x, hacia +y positivo) y los ticks que dura.
+    "TRAYECTORIA": {"agente": str, "tramo": str, "puntos": list, "ticks": int},
     "MENSAJE_ENVIADO": {"id": int, "tipo_mensaje": str, "performativa": str, "de": str, "a": str,
                         "payload": dict, "entrega_en": int},
     "MENSAJE_ENTREGADO": {"id": int, "a": str},
@@ -58,7 +65,8 @@ CAMPOS_EVENTO_OPCIONALES = {
     # Valores de la tabla en ese estado; falta si la tabla no lo conoce (decide el umbral de respaldo).
     "DECISION_DESPACHO": {"q": dict},
 }
-EVENTOS_DESDE = {"RECARGA": "2.2", "RESTRICCION": "2.2", "DECISION_DESPACHO": "2.2"}
+EVENTOS_DESDE = {"RECARGA": "2.2", "RESTRICCION": "2.2", "DECISION_DESPACHO": "2.2", "TRAYECTORIA": "2.4"}
+TRAMOS_TRAYECTORIA = ("vuelta",)
 # DECISION_DESPACHO: claves de `estado`, acciones y de dónde salió la decisión.
 CAMPOS_ESTADO_DESPACHO = ("tramo", "carros_libres", "distancia", "otra_pidio")
 ACCIONES_DESPACHO = ("seguir", "pedir")

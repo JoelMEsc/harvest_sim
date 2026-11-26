@@ -13,8 +13,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from .formato import (CAMPOS_AGENTE, CAMPOS_MUNDO_23, CATEGORIA, CLASE_AGENTE, CLASE_CELDAS, CLASE_REGISTRO,
-                      SCHEMA_VERSION, SCHEMA_VERSION_MAPA)
+from .formato import (CAMPOS_AGENTE, CAMPOS_MUNDO_23, CAMPOS_MUNDO_24, CATEGORIA, CLASE_AGENTE, CLASE_CELDAS,
+                      CLASE_REGISTRO, SCHEMA_VERSION, SCHEMA_VERSION_HILERAS, SCHEMA_VERSION_MAPA)
 
 _AUSENTE = object()
 
@@ -115,7 +115,12 @@ class TraceBuilder:
         if self._ultimo_tick is None:
             raise ValueError("no hay ticks: llama a agregar_tick antes de construir")
         # 2.3 solo si el mundo trae mapa: sin él, el trace es 2.2 byte a byte igual que antes
-        version = SCHEMA_VERSION_MAPA if any(c in self._mundo for c in CAMPOS_MUNDO_23) else SCHEMA_VERSION
+        if any(c in self._mundo for c in CAMPOS_MUNDO_24):
+            version = SCHEMA_VERSION_HILERAS
+        elif any(c in self._mundo for c in CAMPOS_MUNDO_23):
+            version = SCHEMA_VERSION_MAPA
+        else:
+            version = SCHEMA_VERSION
         return {
             "schema_version": version,
             "meta": {

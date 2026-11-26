@@ -317,6 +317,8 @@ def movimiento_cosechadoras(fuente) -> dict:
     """
     linea = linea_de_tiempo(fuente)
     campo = celdas_de_campo(linea.mundo)
+    # 2.4: en la cabecera se corta de lado al abrir el campo (está permitido); solo cuentan las pasadas
+    cabecera = {tuple(c) for c in linea.mundo.get("cabecera", [])}
     cosechadoras = linea.ids(COSECHADORA)
     cosechadas: set[tuple[int, int]] = set()
     lado = pisadas = vueltas = activos = 0
@@ -335,7 +337,7 @@ def movimiento_cosechadoras(fuente) -> dict:
                     continue
                 celda = ahora[:2]
                 if celda in nuevas:
-                    lado += ahora[1] != antes[1]
+                    lado += ahora[1] != antes[1] and celda not in cabecera
                 elif celda in campo and celda not in cosechadas:
                     pisadas += 1
                 if rumbo_anterior[a] is not None and opuesto[rumbo_anterior[a]] == ahora[2] and quieta[a] < 2:
