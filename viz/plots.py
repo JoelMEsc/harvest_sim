@@ -487,6 +487,30 @@ def grafica_sensibilidad(resumen, parametro, metrica, destino, titulo_metrica=No
     return _guardar(fig, destino)
 
 
+def grafica_aprendizaje(curvas, destino, metrica="tiempo_ocioso_total", titulo_metrica=None, ventana=10):
+    """Curva de aprendizaje (M1). `curvas`: {algoritmo: [fila por episodio con `episodio` y `metrica`]}.
+    Cada episodio va como una línea delgada y la media móvil de `ventana` episodios como una línea gruesa;
+    el color sigue a la estrategia (qlearning, sarsa). `referencias`: no se dibujan aquí, van en la tabla."""
+    _estilo()
+    fig, ax = plt.subplots(figsize=(9, 4.4))
+    for algoritmo, filas in curvas.items():
+        xs = [f["episodio"] for f in filas]
+        ys = [f[metrica] for f in filas]
+        color = color_estrategia(algoritmo)
+        ax.plot(xs, ys, color=color, linewidth=1, alpha=0.35)
+        movil = [sum(ys[max(0, i - ventana + 1):i + 1]) / len(ys[max(0, i - ventana + 1):i + 1]) for i in range(len(ys))]
+        ax.plot(xs, movil, color=color, linewidth=2.2, label=f"{algoritmo} (media de {ventana} episodios)")
+        if xs:
+            ax.annotate(algoritmo, (xs[-1], movil[-1]), xytext=(8, 0), textcoords="offset points", va="center",
+                        color=TINTA_2, fontsize=9)
+    nombre_metrica = titulo_metrica or metrica.replace("_", " ")
+    ax.set_title(f"Aprendizaje: {nombre_metrica} por episodio de entrenamiento")
+    ax.set_xlabel("episodio")
+    ax.set_ylabel(nombre_metrica)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=max(1, len(curvas)))
+    return _guardar(fig, destino)
+
+
 # --- 7. Combustible (segunda entrega) -----------------------------------------------------------
 def grafica_combustible(trace, destino, ruta=None, linea=None, series=None):
     """Nivel del tanque de cada agente por tick, con la línea de reserva de cada tipo y un punto en cada
@@ -555,9 +579,9 @@ def _orden_estrategias(filas):
 def color_estrategia(estrategia):
     """Color fijo de cada estrategia, en el orden de ESTRATEGIAS (el color sigue a la estrategia, no a su
     posición en la gráfica)."""
-    from harvest_sim.datos.experimentos import ESTRATEGIAS
-    orden = list(ESTRATEGIAS)
-    i = orden.index(estrategia) if estrategia in orden else len(orden) + hash(estrategia) % 2
+    from harvest_sim.datos.experimentos import TODAS_LAS_ESTRATEGIAS
+    orden = list(TODAS_LAS_ESTRATEGIAS)  # las 4 de coordinación y las 2 aprendidas: un color fijo cada una
+    i = orden.index(estrategia) if estrategia in orden else len(orden)
     return SERIES[i % len(SERIES)]
 
 
@@ -632,9 +656,9 @@ def grafica_costo_j(filas, destino):
     return _guardar(fig, destino)
 
 
-def grafica_diferencias(comparacion, destino, metrica="tiempo_ocioso_total"):
-    """Diferencia media contra la línea base (estrategia − base, pareada por seed) con su IC 95 %.
-    A la izquierda del 0 es menos que la base. Un punto por escenario y estrategia."""
+def grafica_diferencias(comparacion, destino, metrica="tiempo_ocioso_total", referencia="base"):
+    """Diferencia media contra la referencia (estrategia − referencia, pareada por seed) con su IC 95 %.
+    A la izquierda del 0 es menos que la referencia. Un punto por escenario y estrategia."""
     _estilo()
     filas = [c for c in comparacion if c["metrica"] == metrica and c.get("diferencia") is not None]
     if not filas:
@@ -654,8 +678,9 @@ def grafica_diferencias(comparacion, destino, metrica="tiempo_ocioso_total"):
     ax.set_yticklabels(etiquetas, fontsize=9)
     ax.invert_yaxis()
     ax.grid(axis="y", visible=False)
-    ax.set_xlabel(f"Diferencia contra la base en {metrica.replace('_', ' ')} (estrategia − base)")
-    ax.set_title("Diferencia contra la línea base (media e IC 95 %, pareada por seed)")
+    nombre = "la línea base" if referencia == "base" else referencia
+    ax.set_xlabel(f"Diferencia contra {referencia} en {metrica.replace('_', ' ')} (estrategia − {referencia})")
+    ax.set_title(f"Diferencia contra {nombre} (media e IC 95 %, pareada por seed)")
     return _guardar(fig, destino)
 
 

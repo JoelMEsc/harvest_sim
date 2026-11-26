@@ -27,6 +27,11 @@ POLITICA_POR_DEFECTO = {
     # R13 (docs/especificacion_terreno.md §7): los carros no pisan el cultivo en pie. Solo tiene efecto
     # con mapa; apagado por defecto para que A-F no cambien.
     "respetar_cultivo": False,
+    # M1 (docs/especificacion_mejoras.md): cuándo pide carro la cosechadora en subasta. "umbral" = la regla
+    # fija de umbral_aviso; "qlearning" o "sarsa" = la tabla aprendida (qtabla, relativa a config/; None =
+    # config/aprendizaje/qtabla_<algoritmo>_<escenario>.json). Desactivado por defecto.
+    "aviso": "umbral",
+    "qtabla": None,
 }
 INCERTIDUMBRE_POR_DEFECTO = {
     # None = {minimo: grano_por_celda, maximo: grano_por_celda}: depende de otro campo
@@ -49,6 +54,7 @@ COMBUSTIBLE_POR_DEFECTO = {
 COSTO_POR_DEFECTO = {"pesos": dict(PESOS_COSTO)}
 
 ASIGNACIONES = ("directa", "subasta")
+AVISOS = ("umbral", "qlearning", "sarsa")
 SECCIONES_OPCIONALES = ("politica", "incertidumbre", "combustible", "costo")
 
 
@@ -167,6 +173,12 @@ def _validar_secciones(datos: dict) -> None:
     for clave in ("atender_desde_bodega", "encadenar_servicios", "respetar_cultivo"):
         if not isinstance(pol[clave], bool):
             raise ValueError(f"config: politica.{clave} debe ser true o false")
+    if pol["aviso"] not in AVISOS:
+        raise ValueError(f"config: politica.aviso debe ser uno de {list(AVISOS)}")
+    if pol["aviso"] != "umbral" and pol["asignacion"] != "subasta":
+        raise ValueError("config: politica.aviso aprendido requiere politica.asignacion = subasta")
+    if pol["qtabla"] is not None and (not isinstance(pol["qtabla"], str) or not pol["qtabla"]):
+        raise ValueError("config: politica.qtabla debe ser una ruta (texto) o null")
     if not _es_entero(pol["espera_propuestas"]) or pol["espera_propuestas"] < 2:
         raise ValueError("config: politica.espera_propuestas debe ser un entero >= 2")
     if not _es_entero(pol["reintento_subasta"]) or pol["reintento_subasta"] < 1:

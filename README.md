@@ -182,6 +182,7 @@ python tools/correr_experimento.py config/experimentos/estrategias.json --proces
 | `terreno_g_estrategias.json` | G (campo real) × 4 estrategias × 20 seeds |
 | `terreno_g_pendiente.json` | G con el factor de pendiente de 0 a 8 |
 | `terreno_g_r13.json` | G con R13 contra G sin R13 (compactación del suelo) |
+| `m1_despacho.json`, `m1_despacho_incertidumbre.json` | Despacho aprendido (Q-learning y SARSA) contra el umbral fijo y la subasta, en D y G (M1) |
 
 Un experimento es un JSON en `config/experimentos/` con estos campos:
 - los escenarios;
@@ -196,7 +197,16 @@ Escribe en `runs/experimentos/<nombre>/`:
 - con estrategias, `comparacion.csv` (pareada contra `base`) y `ablacion.csv` (costo J);
 - las gráficas de sensibilidad y de estrategias.
 
-Sin incertidumbre (A–E y G), todas las seeds dan lo mismo y el resumen lo indica («sin variación»).
+Con `"referencia": "<estrategia>"`, la comparación pareada se hace contra esa estrategia en vez de `base`. Sin incertidumbre (A–E y G), todas las seeds dan lo mismo y el resumen lo indica («sin variación»).
+
+### Mejoras: despacho aprendido (M1)
+
+```bash
+python tools/entrenar_despacho.py config/escenario_g.json --algoritmo qlearning --episodios 60   # config/aprendizaje/qtabla_qlearning_escenario_g.json
+python -m harvest_sim.cli config/escenario_g.json --estrategia qlearning                         # corre con la tabla, sin explorar
+```
+
+En vez de pedir carro al pasar un umbral fijo, la cosechadora consulta una tabla Q aprendida (Q-learning o SARSA escritos por el equipo, con estados, acciones, recompensas y cliff). Está desactivada por defecto. Formulación: [`docs/especificacion_mejoras.md`](docs/especificacion_mejoras.md). Resultados: [`docs/resultados_mejoras.md`](docs/resultados_mejoras.md).
 
 ### Datos de ejemplo (sin la simulación)
 
@@ -248,11 +258,11 @@ Cada escenario es un JSON en `config/` (nada de valores fijos en el código):
 - **Agentes:** cualquier número de cosechadoras y carros (`num_cosechadoras`, `num_carros`); cada cosechadora cosecha su franja o zona.
 - **Tasas:** son unidades de grano por tick; transferir o descargar `q` unidades dura `ceil(q / tasa)` ticks.
 - **Secciones opcionales.** Cada una tiene valores por defecto que reproducen la línea base:
-  - `politica`: `asignacion` directa o subasta, `umbral_aviso`, `atender_desde_bodega`, `encadenar_servicios`, `respetar_cultivo`;
+  - `politica`: `asignacion` directa o subasta, `umbral_aviso`, `atender_desde_bodega`, `encadenar_servicios`, `respetar_cultivo`, y `aviso` y `qtabla` (M1, despacho aprendido);
   - `incertidumbre`: rendimiento por celda, duración extra y retraso de mensajes;
   - `combustible`: tanques, consumos, reserva, recarga y `factor_pendiente`;
   - `costo`: los pesos de J.
-- **Estrategias:** `--estrategia` en la CLI aplica una de las 4 (`base`, `subasta`, `anticipada`, `anticipada_plus`) sobre la política.
+- **Estrategias:** `--estrategia` en la CLI aplica una de las 4 de coordinación (`base`, `subasta`, `anticipada`, `anticipada_plus`) sobre la política. También acepta las aprendidas (`qlearning`, `sarsa`), que necesitan una tabla entrenada en `config/aprendizaje/` (ver «Mejoras»).
 - **Validación:** `cargar_config` valida todo y falla con un mensaje claro (capacidades, ancho mínimo, enteros positivos, mapa coherente con el escenario…).
 
 ---
@@ -260,7 +270,7 @@ Cada escenario es un JSON en `config/` (nada de valores fijos en el código):
 ## Pruebas y CI
 
 ```bash
-pytest                                                    # 713 pruebas
+pytest                                                    # 729 pruebas
 pytest tests/test_integracion.py                          # corridas completas de A–F (y D, E, F con las 4 estrategias)
 pytest tests/test_terreno_integracion.py                  # G completo: R10, R12, R13 y compactación del suelo
 python tools/verificar_terreno.py                         # G × 4 estrategias × 20 seeds (~3 min), revisado desde el trace
@@ -280,6 +290,7 @@ pytest tests/test_mundo.py::test_serpentina_cubre_todo_el_campo
 | `test_formato_23.py`, `test_mapa.py`, `test_relieve.py` | Trace 2.3, conversión del KML al mapa (área, caminos soldados, red conectada) y relieve del DEM |
 | `test_mundo_mapa.py`, `test_terreno_integracion.py` | Mundo con mapa (R12, R13, zonas, bodega y bases del mapa) y corrida completa de G |
 | `test_exportar_unity.py` | Exportación de traces para Unity |
+| `test_aprendizaje.py` | Despacho aprendido (M1): estado, Q-learning contra SARSA, cliff, respaldo del umbral, tablas y reproducibilidad |
 
 GitHub Actions (`.github/workflows/ci.yml`) corre `pytest` con Python 3.12 en cada push y pull request a `main`, `development` y las ramas personales.
 
@@ -288,7 +299,8 @@ GitHub Actions (`.github/workflows/ci.yml`) corre `pytest` con Python 3.12 en ca
 ## Estructura del repositorio
 
 ```
-config/                  escenarios A–G; experimentos en config/experimentos/; mapas reales en config/mapas/ (KML, JSON y DEM)
+config/                  escenarios A–G; experimentos en config/experimentos/; mapas reales en config/mapas/ (KML, JSON y DEM);
+                         tablas Q entrenadas en config/aprendizaje/
 src/harvest_sim/
 ├── config.py            carga y validación de la configuración
 ├── mundo.py             grid, bodega, bases, serpentina, grano y eventos del mundo
@@ -300,11 +312,12 @@ src/harvest_sim/
 ├── simulacion.py        bucle de ticks y armado del trace
 ├── cli.py               python -m harvest_sim.cli
 ├── servidor.py          API FastAPI para Unity (scripts/servidor.sh)
+├── aprendizaje.py       despacho aprendido (M1): Q-learning y SARSA tabulares
 ├── mapa/                KML a mapa: kml.py, pasadas.py, convertir.py y relieve.py (DEM)
 ├── datos/               formato del log (2.1–2.3), métricas, campo, validador, tablas y experimentos
 └── telemetria.py        acceso de compatibilidad a datos/
 viz/                     viewer.py (visor 2D), plots.py (gráficas), dashboard.py (dashboard HTML)
-tools/                   validar_trace.py, correr_experimento.py, verificar_terreno.py, kml_a_mapa.py,
+tools/                   validar_trace.py, correr_experimento.py, verificar_terreno.py, kml_a_mapa.py, entrenar_despacho.py,
                          exportar_traces_unity.py, generar_trace_ejemplo.py, traces_ejemplo_22.py, traces_ejemplo_23.py
 scripts/                 correr_todos.sh, verificar_instalacion.sh, servidor.sh
 tests/                   pruebas; tests/fixtures/ con los logs de ejemplo (2.1, 2.2 y 2.3)
@@ -320,6 +333,7 @@ runs/                    salidas de las corridas (no se versionan)
 |---|---|
 | [`docs/resultados_terreno.md`](docs/resultados_terreno.md) | Resultados del campo real (escenario G): estrategias, factor de pendiente, R13 y compactación del suelo |
 | [`docs/especificacion_terreno.md`](docs/especificacion_terreno.md) | Terreno real: KML a mapa, trace 2.3, reglas R12 y R13, relieve, zonas, escenario G y Unity |
+| [`docs/especificacion_mejoras.md`](docs/especificacion_mejoras.md), [`docs/resultados_mejoras.md`](docs/resultados_mejoras.md) | Mejoras M1–M12: formulación y resultados |
 | [`docs/plan_terreno.md`](docs/plan_terreno.md) | Plan del terreno real (P0–P7) y mejoras siguientes (M1–M12), con su estado |
 | [`docs/resultados_entrega2.md`](docs/resultados_entrega2.md) | Resultados de la segunda entrega: estrategias, incertidumbre, umbral, capacidad del carro, costo J, respuestas a la retro y limitaciones |
 | [`docs/especificacion_segunda_entrega.md`](docs/especificacion_segunda_entrega.md) | Qué agrega la segunda entrega: varios agentes, obstáculos, subasta, despacho anticipado, aleatoriedad, combustible, costo J, trace 2.2 y servidor |

@@ -15,7 +15,8 @@
 | P5 | Agentes que respetan R13 y corridas de G | Hecho (PR #25) |
 | P6 | Unity: trace 2.3, forma real y relieve | Hecho (harvest-simu-visualization PR #5, EditMode 55/55) |
 | P7 | Pruebas, experimentos y documentación | Hecho (`docs/resultados_terreno.md`) |
-| M1–M12 | Mejoras, solo después de P7 | Pendiente |
+| M1 | Q-learning y SARSA para el despacho | Hecho (`docs/resultados_mejoras.md`): SARSA −37 % de ocio en G |
+| M2–M12 | Mejoras siguientes, en orden | Pendiente |
 
 ## Objetivo y criterios de aceptación
 

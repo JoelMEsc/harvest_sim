@@ -1,0 +1,15 @@
+{
+  "nombre": "m1_despacho_incertidumbre",
+  "descripcion": "Mejora M1 en D con la incertidumbre moderada de estrategias_incertidumbre.json (rendimiento 1-2, duración extra hasta 1 tick, 10 % de mensajes con 1 tick de retraso): las seeds sí varían y la comparación tiene IC 95 % real. La tabla es la entrenada en D sin incertidumbre (generalización).",
+  "escenarios": ["config/escenario_d.json"],
+  "estrategias": ["subasta", "anticipada", "qlearning", "sarsa"],
+  "referencia": "anticipada",
+  "barrido": {
+    "incertidumbre.rendimiento.maximo": [2],
+    "incertidumbre.duracion_extra_maxima": [1],
+    "incertidumbre.retraso_mensajes.probabilidad": [0.1],
+    "incertidumbre.retraso_mensajes.maximo": [1]
+  },
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_ocioso_total"
+}

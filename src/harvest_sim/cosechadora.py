@@ -229,7 +229,15 @@ class Cosechadora:
 
         if politica["asignacion"] == "subasta":
             sin_servicio = self.servicio is None and self.contratado is None and not self._pendiente
-            if sin_servicio and (llena or self.carga >= politica["umbral_aviso"] * self.capacidad):
+            umbral = self.carga >= politica["umbral_aviso"] * self.capacidad
+            # M1: con aviso aprendido, la tabla Q decide; llenarse sin carro en camino es el cliff.
+            despachador = getattr(mundo, "despachador", None) if politica.get("aviso", "umbral") != "umbral" else None
+            if sin_servicio and despachador is not None:
+                if llena:
+                    despachador.forzada(self, mundo)
+                if llena or despachador.decidir(self, mundo, umbral):
+                    self._llamar(tick, mundo, buzon)
+            elif sin_servicio and (llena or umbral):
                 self._llamar(tick, mundo, buzon)
         elif llena:
             self._enviar(buzon, TipoMensaje.LLENA, self._carro_asignado(mundo), tick, {
@@ -241,6 +249,30 @@ class Cosechadora:
         if llena:
             self._lleno_desde = tick
         self.estado = EstadoCosechadora.LLENA_ESPERANDO if llena else EstadoCosechadora.COSECHANDO
+
+    def _bloqueadas_traslado(self, destino: Celda, mundo: Mundo) -> tuple[set[Celda], bool]:
+        """Celdas fijas que el traslado evita y si tiene que cruzar cultivo en pie. R13
+        (docs/especificacion_terreno.md §7): en traslado, la cosechadora va por camino y rastrojo; solo si
+        no existe esa ruta cruza su propio cultivo en pie (se cuenta en cruces_cultivo)."""
+        bloqueadas = mundo.bloqueadas_fijas(self.agent_id)
+        if getattr(mundo, "respetar_cultivo", False):
+            evitar = bloqueadas | (mundo.cultivo_en_pie() - {destino, self.posicion})
+            if rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, evitar) is not None:
+                return evitar, False
+            return bloqueadas, True
+        return bloqueadas, False
+
+    def celdas_de_paso(self, mundo: Mundo) -> set[Celda]:
+        """En traslado (YENDO_A_CAMPO): el destino y los dos siguientes pasos de la ruta más corta sin
+        agentes. El carro contratado espera fuera de ellas; si se detuviera ahí, en un pasillo de una celda
+        la cosechadora no podría pasar ni llenarse, y el carro solo se mueve después de la transferencia."""
+        if self.estado != EstadoCosechadora.YENDO_A_CAMPO or self.posicion is None:
+            return set()
+        if self._retorno is None and self._siguiente >= len(self._camino):
+            return set()
+        destino = self._retorno or self._camino[self._siguiente]
+        ruta = rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, self._bloqueadas_traslado(destino, mundo)[0])
+        return {destino} | set((ruta or [])[:2])
 
     def _cabe(self, celda: Celda, mundo: Mundo) -> bool:
         rendimiento = getattr(mundo, "rendimiento", None)
@@ -454,15 +486,9 @@ class Cosechadora:
         if not self._con_reservas(mundo):
             return self._avanzar_v01(destino, mundo)
 
-        bloqueadas = mundo.bloqueadas_fijas(self.agent_id)
-        # R13 (docs/especificacion_terreno.md §7): en traslado, la cosechadora va por camino y rastrojo. Solo
-        # si no existe esa ruta cruza su propio cultivo en pie (se cuenta en cruces_cultivo).
-        if getattr(mundo, "respetar_cultivo", False):
-            evitar = bloqueadas | (mundo.cultivo_en_pie() - {destino, self.posicion})
-            if rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, evitar) is not None:
-                bloqueadas = evitar
-            else:
-                self.cruces_cultivo += 1
+        bloqueadas, cruza = self._bloqueadas_traslado(destino, mundo)
+        if cruza:
+            self.cruces_cultivo += 1
         reservas = self._reservas_de_otros(tick, mundo)
         plan = rutas.bfs_tiempo(self.posicion, destino, tick - 1, mundo.ancho, mundo.alto, bloqueadas, reservas)
         # Compromiso con el plan (la misma regla del carro): como el BFS en el tiempo prefiere esperar,

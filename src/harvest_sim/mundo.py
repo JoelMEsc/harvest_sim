@@ -113,6 +113,12 @@ class Mundo:
         """Consulta el estado del agente como texto."""
         return _texto(self._agentes[agent_id].estado)
 
+    def paso_de(self, agent_id: str) -> set[Celda]:
+        """Celdas que el agente necesita libres para su traslado en curso (vacío si no se traslada o no lo
+        informa). El carro que acompaña a una cosechadora no se detiene en ellas."""
+        necesita = getattr(self._agentes[agent_id], "celdas_de_paso", None)
+        return necesita(self) if callable(necesita) else set()
+
     def ocupadas(self, excepto: str) -> set[Celda]:
         """Devuelve las posiciones ocupadas por otros agentes."""
         return {
