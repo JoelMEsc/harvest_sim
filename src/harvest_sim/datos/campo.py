@@ -7,6 +7,10 @@ Fórmula (para cualquier mundo; documentada en docs/decisiones.md y docs/equipo/
 
 La fila y = 0 es la fila de servicio (bodega y bases): no es campo y no puede tener obstáculos.
 
+Con mapa (trace 2.3: el mundo trae `caminos`, `fuera_de_campo` o `lotes`; docs/especificacion_terreno.md)
+la fila 0 ya no es especial y el campo es todo el mapa menos obstáculos, caminos, fuera de campo,
+bodega y bases.
+
 Obstáculos en la configuración (sección `obstaculos`, por ahora vacía en los escenarios):
 
     "obstaculos": {"celdas": [[3, 2], [4, 2]],
@@ -94,12 +98,26 @@ def obstaculos(mundo: dict) -> set[tuple[int, int]]:
     return {(c[0], c[1]) for c in mundo.get("obstaculos") or []}
 
 
+def tiene_mapa(mundo: dict) -> bool:
+    """True si el mundo trae un mapa real (2.3): caminos, fuera de campo o lotes."""
+    return any(k in mundo for k in ("caminos", "fuera_de_campo", "lotes"))
+
+
+def _celdas(lista) -> set[tuple[int, int]]:
+    return {(c[0], c[1]) for c in lista or [] if _es_par(c)}
+
+
 def celdas_de_campo(mundo: dict) -> set[tuple[int, int]]:
-    """Celdas que se cosechan: y >= 1, dentro del mapa y sin obstáculo. Vacío si no se conoce el tamaño."""
+    """Celdas que se cosechan. Sin mapa: y >= 1, dentro del mapa y sin obstáculo. Con mapa (2.3): todo
+    el mapa menos obstáculos, caminos, fuera de campo, bodega y bases. Vacío si no se conoce el tamaño."""
     ancho, alto = mundo.get("ancho"), mundo.get("alto")
     if not (_es_entero(ancho) and _es_entero(alto)):
         return set()
-    return {(x, y) for x in range(ancho) for y in range(1, alto)} - obstaculos(mundo)
+    if not tiene_mapa(mundo):
+        return {(x, y) for x in range(ancho) for y in range(1, alto)} - obstaculos(mundo)
+    servicio = _celdas([mundo.get("bodega")]) | _celdas((mundo.get("bases") or {}).values())
+    quitar = obstaculos(mundo) | _celdas(mundo.get("caminos")) | _celdas(mundo.get("fuera_de_campo")) | servicio
+    return {(x, y) for x in range(ancho) for y in range(alto)} - quitar
 
 
 def rendimiento(mundo: dict, celda: tuple[int, int]) -> int:

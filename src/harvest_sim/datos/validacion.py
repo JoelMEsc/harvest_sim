@@ -1,4 +1,4 @@
-"""Validador del trace: el contrato de los formatos 2.1 y 2.2, ejecutable.  [Joel]
+"""Validador del trace: el contrato de los formatos 2.1, 2.2 y 2.3, ejecutable.  [Joel]
 
     errores = validar_trace(trace)                       # [] si es válido
     avisos = []; validar_trace(trace, avisos=avisos)     # además, avisos que no invalidan el trace
@@ -6,12 +6,13 @@
 
 from __future__ import annotations
 
-from .campo import celdas_de_campo
+from .campo import celdas_de_campo, tiene_mapa
 from .formato import (
     CAMPOS_AGENTE,
     CAMPOS_AGENTE_OBLIGATORIOS,
     CAMPOS_EVENTO,
     CAMPOS_EVENTO_OPCIONALES,
+    CAMPOS_MUNDO_23,
     EVENTOS_DESDE,
     MOTIVOS_RECHAZO,
     PAYLOAD_POR_TIPO,
@@ -81,7 +82,8 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
     (celdas cosechadas dentro del campo, fuera de obstáculos y una sola vez; entregado_total acumulado); y
     mensajes (ids crecientes, performativa válida, claves del payload, entrega entre 1 y `retraso_maximo`
     ticks después del envío y una sola vez). En 2.2, además: combustible entre 0 y el tanque, recargas,
-    restricciones, cantidad de cada celda cosechada y `mundo.rendimiento`.
+    restricciones, cantidad de cada celda cosechada y `mundo.rendimiento`. En 2.3, además: los campos del
+    mapa (`tamano_celda_m`, `caminos`, `fuera_de_campo`, `lotes`, `altura_m`, `geo`) y su consistencia.
 
     `retraso_maximo` por defecto: 1 + `config.incertidumbre.retraso_mensajes.maximo` del trace (1 si no hay).
 
@@ -180,7 +182,7 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
                     vistas.add((x, y))
                     if ancho is not None and alto is not None and not (0 <= x < ancho and 0 <= y < alto):
                         error(f"mundo: obstáculo ({x}, {y}) fuera del mapa")
-                    elif y == 0 or (x, y) in ocupadas:
+                    elif (x, y) in ocupadas or (y == 0 and not tiene_mapa(mundo)):
                         error(f"mundo: obstáculo ({x}, {y}) en la fila de servicio, la bodega o una base")
 
     def dentro_del_mapa(x, y):
@@ -203,6 +205,10 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
                     elif campo is not None and (x, y) not in campo and valor != 0:
                         error(f"mundo: rendimiento de ({x}, {y}) debe ser 0 (no es campo), es {valor}")
     con_obstaculo = {tuple(c) for c in mundo.get("obstaculos", [])}
+    if any(c in mundo for c in CAMPOS_MUNDO_23):
+        if v < (2, 3):
+            error(f"mundo: {[c for c in CAMPOS_MUNDO_23 if c in mundo]} requieren schema_version 2.3")
+        _validar_mapa(mundo, ancho, alto, campo, con_obstaculo, error)
 
     catalogo: dict[str, dict] = {}
     agentes = trace.get("agentes")
@@ -367,7 +373,8 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
                 if (x, y) in con_obstaculo:
                     error(f"{pref}: celda ({x}, {y}) es un obstáculo, no se cosecha")
                 elif campo is not None and (x, y) not in campo:
-                    error(f"{pref}: celda ({x}, {y}) fuera del campo (el campo son las filas y >= 1 del mapa)")
+                    error(f"{pref}: celda ({x}, {y}) fuera del campo (sin mapa, el campo son las filas y >= 1; "
+                          "con mapa, todo menos caminos, fuera de campo, bodega y bases)")
                 if (x, y) in celdas:
                     error(f"{pref}: la celda ({x}, {y}) se cosecha dos veces")
                 celdas.add((x, y))
@@ -451,3 +458,76 @@ def validar_trace(trace, retraso_maximo: int | None = None, avisos: list[str] | 
         if ident not in entregados and entrega_en <= total:
             error(f"el mensaje {ident} (enviado en el tick {enviado_en}) nunca se entregó")
     return errores
+
+
+def _validar_mapa(mundo: dict, ancho, alto, campo, con_obstaculo: set, error) -> None:
+    """Campos del mapa (trace 2.3; docs/especificacion_terreno.md §6)."""
+    def dentro(c):
+        return ancho is not None and alto is not None and 0 <= c[0] < ancho and 0 <= c[1] < alto
+
+    if "tamano_celda_m" in mundo and not (_es_numero(mundo["tamano_celda_m"]) and mundo["tamano_celda_m"] > 0):
+        error(f"mundo: tamano_celda_m debe ser un número > 0, es {mundo['tamano_celda_m']!r}")
+    grupos = {}
+    for nombre in ("caminos", "fuera_de_campo"):
+        if nombre not in mundo:
+            continue
+        lista = mundo[nombre]
+        if not (isinstance(lista, list) and all(_es_celda(c) for c in lista)):
+            error(f"mundo: {nombre} debe ser una lista de [x, y]")
+            continue
+        celdas = [tuple(c) for c in lista]
+        if len(set(celdas)) != len(celdas):
+            error(f"mundo: {nombre} tiene celdas repetidas")
+        for c in celdas:
+            if not dentro(c):
+                error(f"mundo: {nombre} tiene la celda {list(c)} fuera del mapa")
+            elif c in con_obstaculo:
+                error(f"mundo: la celda {list(c)} está en {nombre} y en obstaculos")
+        grupos[nombre] = set(celdas)
+    if grupos.get("caminos", set()) & grupos.get("fuera_de_campo", set()):
+        error("mundo: una celda no puede estar en caminos y en fuera_de_campo")
+    servicio = set()
+    if _es_celda(mundo.get("bodega")):
+        servicio.add(tuple(mundo["bodega"]))
+    if isinstance(mundo.get("bases"), dict):
+        servicio |= {tuple(b) for b in mundo["bases"].values() if _es_celda(b)}
+    if servicio & grupos.get("fuera_de_campo", set()):
+        error("mundo: la bodega y las bases no pueden estar fuera de campo")
+    if "lotes" in mundo:
+        lotes = mundo["lotes"]
+        if not (isinstance(lotes, dict) and all(isinstance(k, str) for k in lotes)
+                and all(isinstance(v, list) and all(_es_celda(c) for c in v) for v in lotes.values())):
+            error("mundo: lotes debe ser un objeto {nombre: [[x, y], ...]}")
+        else:
+            union = set()
+            for nombre, celdas in lotes.items():
+                propias = {tuple(c) for c in celdas}
+                if propias & union:
+                    error(f"mundo: el lote {nombre} comparte celdas con otro lote")
+                union |= propias
+            if campo is not None and union != campo:
+                error(f"mundo: los lotes ({len(union)} celdas) no coinciden con el campo ({len(campo)} celdas)")
+    if "altura_m" in mundo:
+        a = mundo["altura_m"]
+        if not (isinstance(a, list) and alto is not None and len(a) == alto
+                and all(isinstance(f, list) and len(f) == ancho and all(_es_numero(h) for h in f) for f in a)):
+            error(f"mundo: altura_m debe ser una matriz de {alto} × {ancho} números (metros)")
+    if "geo" in mundo:
+        g = mundo["geo"]
+        if not isinstance(g, dict):
+            error("mundo: geo debe ser un objeto")
+            return
+        for c in ("epsg", "origen_utm", "rumbo_grados", "atribucion", "formas"):
+            if c not in g:
+                error(f"mundo.geo: falta {c}")
+        if "epsg" in g and not _es_entero(g["epsg"]):
+            error("mundo.geo: epsg debe ser un entero")
+        if "origen_utm" in g and not (isinstance(g["origen_utm"], list) and len(g["origen_utm"]) == 2
+                                      and all(_es_numero(n) for n in g["origen_utm"])):
+            error("mundo.geo: origen_utm debe ser [E, N]")
+        if "rumbo_grados" in g and not (_es_numero(g["rumbo_grados"]) and 0 <= g["rumbo_grados"] < 180):
+            error("mundo.geo: rumbo_grados debe estar en [0, 180)")
+        formas = g.get("formas")
+        if "formas" in g and not (isinstance(formas, dict)
+                                  and all(k in formas for k in ("lotes", "obstaculos", "caminos"))):
+            error("mundo.geo: formas debe traer lotes, obstaculos y caminos")

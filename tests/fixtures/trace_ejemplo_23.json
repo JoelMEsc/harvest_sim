@@ -1,0 +1,174 @@
+{
+  "schema_version": "2.3",
+  "meta": {
+    "escenario": "ejemplo_23",
+    "seed": 0,
+    "total_ticks": 16,
+    "clase": "AccountabilityRecord"
+  },
+  "config": {
+    "nombre": "ejemplo_23",
+    "seed": 0,
+    "ancho": 6,
+    "alto": 5,
+    "num_carros": 1,
+    "num_cosechadoras": 1,
+    "grano_por_celda": 1,
+    "capacidad_cosechadora": 4,
+    "capacidad_carro": 8,
+    "tasa_transferencia": 4,
+    "tasa_descarga": 8,
+    "max_ticks": 500,
+    "obstaculos": {
+      "celdas": [],
+      "regiones": []
+    },
+    "politica": {
+      "asignacion": "directa",
+      "umbral_aviso": 1.0,
+      "atender_desde_bodega": false,
+      "encadenar_servicios": false,
+      "espera_propuestas": 2,
+      "reintento_subasta": 3,
+      "respetar_cultivo": true
+    },
+    "mapa": {
+      "archivo": "mapas/ejemplo_23.json",
+      "sha256": "guion"
+    }
+  },
+  "mundo": {
+    "ancho": 6,
+    "alto": 5,
+    "bodega": [0, 0],
+    "bases": {
+      "carro_1": [1, 0],
+      "cosechadora_1": [2, 0]
+    },
+    "grano_por_celda": 1,
+    "obstaculos": [
+      [5, 4]
+    ],
+    "tamano_celda_m": 12.0,
+    "caminos": [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+      [0, 1],
+      [0, 2],
+      [0, 3],
+      [0, 4]
+    ],
+    "fuera_de_campo": [
+      [5, 0],
+      [4, 1],
+      [5, 1],
+      [4, 2],
+      [5, 2]
+    ],
+    "lotes": {
+      "A": [
+        [1, 1],
+        [2, 1],
+        [3, 1],
+        [1, 2],
+        [2, 2],
+        [3, 2]
+      ],
+      "B": [
+        [1, 3],
+        [2, 3],
+        [3, 3],
+        [4, 3],
+        [5, 3],
+        [1, 4],
+        [2, 4],
+        [3, 4],
+        [4, 4]
+      ]
+    },
+    "altura_m": [
+      [1745.0, 1745.6, 1746.2, 1746.8, 1747.4, 1748.0],
+      [1745.4, 1746.0, 1746.6, 1747.2, 1747.8, 1748.4],
+      [1745.8, 1746.4, 1747.0, 1747.6, 1748.2, 1748.8],
+      [1746.2, 1746.8, 1747.4, 1748.0, 1748.6, 1749.2],
+      [1746.6, 1747.2, 1747.8, 1748.4, 1749.0, 1749.6]
+    ],
+    "geo": {
+      "epsg": 32613,
+      "origen_utm": [749000.0, 2375000.0],
+      "rumbo_grados": 52.4,
+      "atribucion": "Guion de ejemplo (sin datos reales).",
+      "formas": {
+        "lotes": {
+          "A": [
+            [12.0, 12.0],
+            [48.0, 12.0],
+            [48.0, 36.0],
+            [12.0, 36.0]
+          ],
+          "B": [
+            [12.0, 36.0],
+            [72.0, 36.0],
+            [72.0, 60.0],
+            [12.0, 60.0]
+          ]
+        },
+        "obstaculos": [
+          [
+            [60.0, 48.0],
+            [72.0, 48.0],
+            [72.0, 60.0],
+            [60.0, 60.0]
+          ]
+        ],
+        "caminos": [
+          [
+            [6.0, 60.0],
+            [6.0, 6.0],
+            [60.0, 6.0]
+          ]
+        ]
+      }
+    },
+    "clase_celdas": "SemanticMapCell"
+  },
+  "agentes": [
+    {
+      "id": "cosechadora_1",
+      "tipo": "cosechadora",
+      "clase": "AutonomousAgriculturalRobot",
+      "capacidad": 4,
+      "base": [2, 0]
+    },
+    {
+      "id": "carro_1",
+      "tipo": "carro",
+      "clase": "AutonomousAgriculturalRobot",
+      "capacidad": 8,
+      "base": [1, 0]
+    }
+  ],
+  "ticks": [
+    {"tick": 0, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 2, "y": 0, "orientacion": "S"}, "estado": "EN_BASE", "carga": 0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 0, "orientacion": "S"}, "estado": "EN_BASE", "carga": 0}}], "checksum": "88c3424c4f1d0c26"},
+    {"tick": 1, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"estado": "YENDO_A_CAMPO"}}], "checksum": "ab939a40d6fc9142"},
+    {"tick": 2, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 0, "orientacion": "E"}}}], "checksum": "7a3610e7856c4369"},
+    {"tick": 3, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 1, "orientacion": "S"}, "estado": "COSECHANDO", "carga": 1}}, {"tipo": "CELDA_COSECHADA", "celda": [3, 1], "agente": "cosechadora_1", "cantidad": 1}], "checksum": "a5bb971ddb3f8b3c"},
+    {"tick": 4, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 2, "y": 1, "orientacion": "O"}, "carga": 2}}, {"tipo": "CELDA_COSECHADA", "celda": [2, 1], "agente": "cosechadora_1", "cantidad": 1}], "checksum": "ff2a3bb1eff566ce"},
+    {"tick": 5, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 1, "y": 1, "orientacion": "O"}, "carga": 3}}, {"tipo": "CELDA_COSECHADA", "celda": [1, 1], "agente": "cosechadora_1", "cantidad": 1}], "checksum": "d7ebffe7ffac942b"},
+    {"tick": 6, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 1, "y": 2, "orientacion": "S"}, "estado": "LLENA_ESPERANDO", "carga": 4}}, {"tipo": "CELDA_COSECHADA", "celda": [1, 2], "agente": "cosechadora_1", "cantidad": 1}, {"tipo": "MENSAJE_ENVIADO", "id": 1, "tipo_mensaje": "LLENA", "performativa": "request", "de": "cosechadora_1", "a": "carro_1", "payload": {"x": 1, "y": 2, "carga": 4}, "entrega_en": 7}], "checksum": "437362f405e81baa"},
+    {"tick": 7, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 1, "a": "carro_1"}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "YENDO_A_COSECHADORA"}}], "checksum": "fd18561ee382aff0"},
+    {"tick": 8, "cambios": [{"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 1, "orientacion": "S"}, "estado": "ESPERANDO_TRANSFERENCIA"}}], "checksum": "eaa57b119e086c20"},
+    {"tick": 9, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"estado": "TRANSFIRIENDO"}}], "checksum": "13d17f3fc8873175"},
+    {"tick": 10, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"estado": "COSECHANDO", "carga": 0}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"carga": 4}}, {"tipo": "MENSAJE_ENVIADO", "id": 2, "tipo_mensaje": "TRANSFERENCIA_TERMINADA", "performativa": "inform", "de": "cosechadora_1", "a": "carro_1", "payload": {"cantidad": 4}, "entrega_en": 11}], "checksum": "a64e33802705938c"},
+    {"tick": 11, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 2, "a": "carro_1"}, {"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 2, "y": 2, "orientacion": "E"}, "carga": 1}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "YENDO_A_BODEGA"}}, {"tipo": "CELDA_COSECHADA", "celda": [2, 2], "agente": "cosechadora_1", "cantidad": 1}], "checksum": "d7ea4da97362208e"},
+    {"tick": 12, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 2, "orientacion": "E"}, "carga": 2}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 0, "orientacion": "N"}}}, {"tipo": "CELDA_COSECHADA", "celda": [3, 2], "agente": "cosechadora_1", "cantidad": 1}], "checksum": "71f234ef93287ebc"},
+    {"tick": 13, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 3, "y": 3, "orientacion": "S"}, "carga": 3}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 0, "y": 0, "orientacion": "O"}, "estado": "DESCARGANDO"}}, {"tipo": "CELDA_COSECHADA", "celda": [3, 3], "agente": "cosechadora_1", "cantidad": 1}], "checksum": "1bb9b9632a8a8a95"},
+    {"tick": 14, "cambios": [{"tipo": "AGENTE", "id": "cosechadora_1", "set": {"pose": {"x": 2, "y": 3, "orientacion": "O"}, "estado": "LLENA_ESPERANDO", "carga": 4}}, {"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "REGRESANDO_A_BASE", "carga": 0}}, {"tipo": "CELDA_COSECHADA", "celda": [2, 3], "agente": "cosechadora_1", "cantidad": 1}, {"tipo": "DEPOSITO", "agente": "carro_1", "cantidad": 4, "entregado_total": 4}, {"tipo": "MENSAJE_ENVIADO", "id": 3, "tipo_mensaje": "LLENA", "performativa": "request", "de": "cosechadora_1", "a": "carro_1", "payload": {"x": 2, "y": 3, "carga": 4}, "entrega_en": 15}], "checksum": "51282c1eab3d181e"},
+    {"tick": 15, "cambios": [{"tipo": "MENSAJE_ENTREGADO", "id": 3, "a": "carro_1"}, {"tipo": "AGENTE", "id": "carro_1", "set": {"pose": {"x": 1, "y": 0, "orientacion": "E"}, "estado": "EN_BASE"}}], "checksum": "91423f64c6dd6d35"},
+    {"tick": 16, "cambios": [{"tipo": "AGENTE", "id": "carro_1", "set": {"estado": "YENDO_A_COSECHADORA"}}], "checksum": "bdd146e564b72106"}
+  ],
+  "metricas": {}
+}
