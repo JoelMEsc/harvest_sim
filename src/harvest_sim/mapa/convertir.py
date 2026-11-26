@@ -53,7 +53,9 @@ class ErrorMapa(ValueError):
 
 @dataclass
 class Marco:
-    """Marco de la cuadrícula: x a lo largo de los surcos (rumbo θ), y = x girado 90° a la izquierda."""
+    """Marco de la cuadrícula: x a lo largo de los surcos (rumbo θ) e y a la DERECHA de los surcos (x girado
+    90° en sentido horario). Así, con la convención de harvest_sim y de Unity (norte = y − 1; Unity dibuja la
+    celda (x, y) en (x·s, 0, −y·s)), el mapa se ve como en la realidad, sin espejo."""
     e0: float
     n0: float
     rumbo: float
@@ -61,11 +63,11 @@ class Marco:
     def a_cuadricula(self, e: float, n: float) -> tuple[float, float]:
         t = math.radians(self.rumbo)
         de, dn = e - self.e0, n - self.n0
-        return de * math.sin(t) + dn * math.cos(t), -de * math.cos(t) + dn * math.sin(t)
+        return de * math.sin(t) + dn * math.cos(t), de * math.cos(t) - dn * math.sin(t)
 
     def a_utm(self, x: float, y: float) -> tuple[float, float]:
         t = math.radians(self.rumbo)
-        return self.e0 + x * math.sin(t) - y * math.cos(t), self.n0 + x * math.cos(t) + y * math.sin(t)
+        return self.e0 + x * math.sin(t) + y * math.cos(t), self.n0 + x * math.cos(t) - y * math.sin(t)
 
 
 def _nombre_corto(nombre: str) -> str:

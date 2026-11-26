@@ -23,14 +23,14 @@ ATRIBUCION_DEM = (
 
 
 def transformacion_cuadricula(geo: dict, tamano_celda_m: float):
-    """Afín de (columna, fila) de la cuadrícula a UTM: E = E0 + s·sinθ·col − s·cosθ·fila,
-    N = N0 + s·cosθ·col + s·sinθ·fila (el mismo marco de convertir.Marco)."""
+    """Afín de (columna, fila) de la cuadrícula a UTM: E = E0 + s·sinθ·col + s·cosθ·fila,
+    N = N0 + s·cosθ·col − s·sinθ·fila (el mismo marco de convertir.Marco: y a la derecha de los surcos)."""
     from affine import Affine
 
     t = math.radians(geo["rumbo_grados"])
     s = tamano_celda_m
     e0, n0 = geo["origen_utm"]
-    return Affine(s * math.sin(t), -s * math.cos(t), e0, s * math.cos(t), s * math.sin(t), n0)
+    return Affine(s * math.sin(t), s * math.cos(t), e0, s * math.cos(t), -s * math.sin(t), n0)
 
 
 def alturas_en_cuadricula(ruta_dem: str | Path, geo: dict, tamano_celda_m: float, ancho: int, alto: int):

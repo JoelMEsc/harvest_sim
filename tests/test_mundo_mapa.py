@@ -96,7 +96,7 @@ def test_r12_fuera_de_campo_es_fijo_para_todos(mundo_g):
 
 def test_r13_cultivo_en_pie_solo_para_carros(mundo_g):
     campo = mundo_g.cultivo_en_pie()
-    assert len(campo) == 1762
+    assert len(campo) == 1772
     assert campo <= mundo_g.bloqueadas_para("carro_1")
     assert not campo & mundo_g.bloqueadas_para("cosechadora_1")
     cosechadora = Dummy("cosechadora_1")
@@ -150,7 +150,7 @@ def test_mas_cosechadoras_que_lotes_parte_el_mas_grande(config_g):
     zonas = mundo.zonas()
     assert len(zonas) == 4 and all(zonas.values())
     todas = [c for j in range(1, 5) for c in mundo.camino(f"cosechadora_{j}")]
-    assert len(todas) == len(set(todas)) == 1762
+    assert len(todas) == len(set(todas)) == 1772
 
 
 def test_descripcion_23_valida(mundo_g, config_g):

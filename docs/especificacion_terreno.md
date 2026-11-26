@@ -69,12 +69,12 @@ Cada celda es de un solo tipo, con esta prioridad:
 | 4 | `patio` | Bodega y bases (§4.5) |
 | 5 | `fuera_de_campo` | Todo lo demás |
 
-Si, por respetar el campo de las orillas, los caminos en celdas quedan en varias piezas (aunque la red geométrica sea una), cada pieza se une a la principal por el **puente más corto de celdas de campo**. Esas celdas pasan a camino y el reporte dice cuántas son (21 en El Pueblito).
+Si, por respetar el campo de las orillas, los caminos en celdas quedan en varias piezas (aunque la red geométrica sea una), cada pieza se une a la principal por el **puente más corto de celdas de campo**. Esas celdas pasan a camino y el reporte dice cuántas son (17 en El Pueblito).
 
 Cada celda de campo guarda su lote (A, B o C).
 
 **Validaciones** (el convertidor falla si no se cumplen):
-- el área cosechable difiere en menos de 5 % del área real: lotes menos obstáculos, porque el KML no tiene huecos y la arboleda está dentro del lote C. En El Pueblito la diferencia es de −3.2 %;
+- el área cosechable difiere en menos de 5 % del área real: lotes menos obstáculos, porque el KML no tiene huecos y la arboleda está dentro del lote C. En El Pueblito la diferencia es de −2.6 %;
 - todo el campo es alcanzable desde la bodega por camino, patio o campo;
 - cada lote toca al menos una celda de camino.
 
@@ -123,8 +123,9 @@ La bodega y las bases van en celdas que no son campo ni camino, pegadas al camin
 
 - `altura_m` es opcional (§8).
 - `geo.formas` está en **metros del marco de la cuadrícula**: el origen es la esquina de la celda (0, 0), x a lo largo de los surcos y y perpendicular.
-- `geo.origen_utm` = (E0, N0) y `geo.rumbo_grados` = θ (desde el norte, en sentido horario) permiten volver a UTM. El eje x de la cuadrícula es la dirección de los surcos, (sin θ, cos θ) en (E, N), y el eje y es ese mismo eje girado 90° a la izquierda, (−cos θ, sin θ):
-  `E = E0 + x·sin θ − y·cos θ`, `N = N0 + x·cos θ + y·sin θ` (x e y en metros del marco de la cuadrícula).
+- `geo.origen_utm` = (E0, N0) y `geo.rumbo_grados` = θ (desde el norte, en sentido horario) permiten volver a UTM. El eje x de la cuadrícula es la dirección de los surcos, (sin θ, cos θ) en (E, N). El eje y apunta a la **derecha** de los surcos, (cos θ, −sin θ):
+  `E = E0 + x·sin θ + y·cos θ`, `N = N0 + x·cos θ − y·sin θ` (x e y en metros del marco de la cuadrícula).
+  La y va a la derecha para que coincida con la convención de harvest_sim (norte = y − 1) y de Unity (la celda (x, y) se dibuja en (x·s, 0, −y·s)): así el mapa se ve como en la realidad y no en espejo.
 
 ## 6. Trace 2.3
 
@@ -160,14 +161,14 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 - `mundo.bloqueadas_para(agent_id)` devuelve las celdas fijas más, para los carros, el campo sin cosechar. El conjunto en pie se actualiza con cada cosecha.
 - El carro se estaciona junto a la cosechadora en rastrojo o camino. La celda de atrás en la pasada siempre está cosechada.
 - Cuando la ruta de un carro se alarga por rodear el cultivo, se registra `RESTRICCION` con `regla: "R13_cultivo_en_pie"`, una por tramo.
-- En traslado, la cosechadora prefiere caminos y rastrojo. Si no hay ruta así (un borde irregular del lote), cruza su propio cultivo en pie y se cuenta (`Cosechadora.cruces_cultivo`). En G pasa 16 ticks por corrida (~1 % de sus ticks), en los cambios de pasada sobre bordes irregulares.
+- En traslado, la cosechadora prefiere caminos y rastrojo. Si no hay ruta así (un borde irregular del lote), cruza su propio cultivo en pie y se cuenta (`Cosechadora.cruces_cultivo`). En G pasa 23 ticks por corrida (~1.5 % de los ticks), en los cambios de pasada sobre bordes irregulares.
 - Si un carro no tiene ruta, rechaza la llamada con `sin_ruta`.
 
 ## 8. Relieve
 
 - `config/mapas/el_pueblito_dem.tif` es la ventana de El Pueblito (49 × 53 píxeles, 8 KB) del **Copernicus DEM GLO-30**. Se leyó del COG público `Copernicus_DSM_COG_10_N21_00_W103_00_DEM.tif` (AWS Open Data) y sirve para regenerar el mapa sin red.
 - `mapa/relieve.py` lo remuestrea con interpolación **bilineal** (`rasterio.warp.reproject`) en el centro de cada celda, con una afín girada igual a la de la cuadrícula. El resultado va a `altura_m` del mapa y de `mundo`, y la atribución a `geo.atribucion`. Se activa con `"dem"` en el convertidor.
-- **El Pueblito:** el campo va de 1705 a 1715 m. La pendiente media entre celdas vecinas es de 1.5 %, el percentil 95 de 5.4 % y la máxima de 16 %. El GLO-30 es un **modelo de superficie** (incluye árboles y construcciones), así que la arboleda aparece un poco más alta; se documenta.
+- **El Pueblito:** el campo va de 1705 a 1716 m. La pendiente media entre celdas vecinas es de 1.5 %, el percentil 95 de 5.2 % y la máxima de 16.6 %. El GLO-30 es un **modelo de superficie** (incluye árboles y construcciones), así que la arboleda aparece un poco más alta; se documenta.
 - **Consumo por pendiente:** `combustible.factor_pendiente` (0 por defecto, sin efecto). Al subir de una celda a otra, el consumo por celda se multiplica por `1 + f · Δh / tamano_celda_m`; al bajar no se descuenta. La idea sale de ASABE D497 (resistencia por pendiente) y el valor de f es un supuesto documentado.
   - En G con f = 2, el combustible usado sube de 6144 a 6242 L (+1.6 %); el tiempo no cambia.
 - **Unity** construye su terreno interpolando `altura_m`: no hace falta un heightmap aparte.
@@ -217,9 +218,9 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 | `tasa_transferencia` | 12 por tick | Sinfín de descarga de ~150 L/s (~0.11 t/s ≈ 0.8 t por tick) |
 | `tasa_descarga` | 24 por tick | Carro de 550 bu/min (~14 t/min ≈ 1.6 t por tick) |
 
-**Zonas:** la cosechadora 1 lleva el lote C (922 celdas) y la 2 los lotes A y B (840).
+**Zonas:** la cosechadora 1 lleva el lote C (919 celdas) y la 2 los lotes A y B (853).
 
-**Corrida de humo** (seed 0, estrategia base, antes de los ajustes de agentes de P5): termina en 1708 ticks y su trace 2.3 valida, con 0 colisiones y 0 BLOQUEO. Corre en ~11 s.
+**Corridas:** ver §13 (las 4 estrategias, unos 20 s por corrida).
 
 En el trace, `config.mapa` queda como `{"archivo", "sha256"}`: el mapa completo ya va en `mundo`. A–F no cambian sus métricas, aunque `config.politica` ahora incluye `respetar_cultivo: false`.
 
@@ -229,12 +230,12 @@ En el trace, `config.mapa` queda como `{"archivo", "sha256"}`: el mapa completo 
 
 | Estrategia | Ticks | Ocio total | Colisiones | BLOQUEO | R12 | Carros sobre cultivo (R13) | Cosechadora sobre cultivo sin cosechar |
 |---|---|---|---|---|---|---|---|
-| base | 1754 | 685 | 0 | 0 | 0 | 0 | 16 ticks |
-| subasta | 1773 | 717 | 0 | 0 | 0 | 0 | 16 ticks |
-| anticipada | 1514 | 212 | 0 | 0 | 0 | 0 | 16 ticks |
-| anticipada_plus | 1505 | 202 | 0 | 0 | 0 | 0 | 16 ticks |
+| base | 1692 | 806 | 0 | 0 | 0 | 0 | 23 ticks |
+| subasta | 1701 | 797 | 0 | 0 | 0 | 0 | 23 ticks |
+| anticipada | 1481 | 390 | 0 | 0 | 0 | 0 | 23 ticks |
+| anticipada_plus | 1463 | 360 | 0 | 0 | 0 | 0 | 23 ticks |
 
 - Las 80 corridas terminan y validan, y entregan el 100 % del grano. Tardan ~21 s cada una.
 - G no tiene incertidumbre, así que las 20 seeds dan lo mismo.
-- En el campo real, el **despacho anticipado baja el ocio un 69 %**: los traslados son largos y el carro necesita salir antes.
-- **R13 no alarga ninguna ruta en las corridas:** la cosecha avanza desde la entrada, así que el rastrojo une siempre los caminos con la cosechadora. Además, en la cuadrícula rodear por un camino en escalera mide lo mismo que cruzar (vecindad 4); R13 solo alarga las rutas que tienen que retroceder. La prueba `test_r13_se_registra_cuando_el_carro_rodea_el_cultivo` construye ese caso: llegar al camino (12, 23) sin pisar maíz cuesta 106 celdas más, y se registra la `RESTRICCION`.
+- En el campo real, el **despacho anticipado baja el ocio un 52 %** (55 % con anticipada_plus): los traslados son largos y el carro necesita salir antes.
+- **R13 casi nunca alarga una ruta en las corridas** (1 restricción por corrida en anticipada_plus): la cosecha avanza desde la entrada, así que el rastrojo une siempre los caminos con la cosechadora. Además, en la cuadrícula rodear por un camino en escalera mide lo mismo que cruzar (vecindad 4); R13 solo alarga las rutas que tienen que retroceder. La prueba `test_r13_se_registra_cuando_el_carro_rodea_el_cultivo` construye ese caso: llegar al camino (12, 23) sin pisar maíz cuesta 106 celdas más, y se registra la `RESTRICCION`.
