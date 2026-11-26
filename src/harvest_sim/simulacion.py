@@ -106,7 +106,8 @@ def ejecutar(config: Config) -> dict:
 
         # combustible: consumo y recarga después de que todos actuaron (spec §9)
         for agente in agentes:
-            mundo.actualizar_combustible(agente, agente.posicion != inicio[agente.agent_id])
+            mundo.actualizar_combustible(agente, agente.posicion != inicio[agente.agent_id],
+                                         desde=inicio[agente.agent_id])
 
         # recoger los eventos producidos durante este tick
         eventos = buzon.drenar_eventos() + mundo.drenar_eventos()

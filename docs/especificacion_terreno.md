@@ -165,9 +165,12 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 
 ## 8. Relieve
 
-- `tools/kml_a_mapa.py --dem <COG>` lee el **Copernicus DEM GLO-30** (cuadro N21 W103) y lo remuestrea en bilineal al centro de cada celda, en el marco de la cuadrícula. Solo lee la ventana de la zona del COG.
-- `altura_m` va en el mapa y en `mundo`.
-- **Consumo por pendiente:** `combustible.factor_pendiente` (0 por defecto, sin efecto). Al subir de una celda a otra, el consumo por celda se multiplica por `1 + f · pendiente_%/100`; al bajar no se descuenta. La idea sale de ASABE D497 (resistencia por pendiente), y el valor de f es un supuesto documentado.
+- `config/mapas/el_pueblito_dem.tif` es la ventana de El Pueblito (49 × 53 píxeles, 8 KB) del **Copernicus DEM GLO-30**. Se leyó del COG público `Copernicus_DSM_COG_10_N21_00_W103_00_DEM.tif` (AWS Open Data) y sirve para regenerar el mapa sin red.
+- `mapa/relieve.py` lo remuestrea con interpolación **bilineal** (`rasterio.warp.reproject`) en el centro de cada celda, con una afín girada igual a la de la cuadrícula. El resultado va a `altura_m` del mapa y de `mundo`, y la atribución a `geo.atribucion`. Se activa con `"dem"` en el convertidor.
+- **El Pueblito:** el campo va de 1705 a 1715 m. La pendiente media entre celdas vecinas es de 1.5 %, el percentil 95 de 5.4 % y la máxima de 16 %. El GLO-30 es un **modelo de superficie** (incluye árboles y construcciones), así que la arboleda aparece un poco más alta; se documenta.
+- **Consumo por pendiente:** `combustible.factor_pendiente` (0 por defecto, sin efecto). Al subir de una celda a otra, el consumo por celda se multiplica por `1 + f · Δh / tamano_celda_m`; al bajar no se descuenta. La idea sale de ASABE D497 (resistencia por pendiente) y el valor de f es un supuesto documentado.
+  - En G con f = 2, el combustible usado sube de 6144 a 6242 L (+1.6 %); el tiempo no cambia.
+- **Unity** construye su terreno interpolando `altura_m`: no hace falta un heightmap aparte.
 
 ## 9. Zonas y orden de las pasadas (solo con mapa)
 
@@ -182,7 +185,7 @@ Solo agrega campos a la versión 2.2. `TraceBuilder` escribe `"2.3"` **solo si e
 
 - Acepta 2.1, 2.2 y 2.3.
 - Dibuja **en el marco de la cuadrícula**: x a lo largo de los surcos, sin rotar el mundo. `geo.rumbo_grados` solo orienta el norte y el sol.
-- El Terrain sale de `altura_m`; las celdas, el maíz y las máquinas se apoyan en esa altura.
+- El terreno sale de `altura_m` (interpolado entre los centros de las celdas); las celdas, el maíz y las máquinas se apoyan en esa altura.
 - Las mallas de lotes, caminos y obstáculos salen de `geo.formas`, con el código de mallas de `CultivoDesdeKML.cs`.
 - Las celdas `fuera_de_campo` no llevan maíz.
 - La atribución del DEM va en el HUD.

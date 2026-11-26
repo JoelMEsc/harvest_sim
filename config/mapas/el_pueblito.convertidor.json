@@ -12,5 +12,5 @@
     "tolerancia_area": 0.05,
     "radio_poste_m": 0.5
   },
-  "dem": null
+  "dem": "el_pueblito_dem.tif"
 }

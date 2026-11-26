@@ -6,3 +6,4 @@ uvicorn==0.32.1
 httpx==0.28.1
 shapely==2.0.6
 pyproj==3.7.0
+rasterio==1.4.3
