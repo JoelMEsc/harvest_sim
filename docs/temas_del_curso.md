@@ -16,8 +16,8 @@ El proyecto simula cosechadoras y carros recolectores que se coordinan por mensa
 | Coordinación y restricciones | Rutas en el tiempo con reservas y reglas R1–R13 | 0 salidas del predio y 0 m de carro sobre cultivo en pie en G |
 | Teoría de la decisión y utilidad | Costo J (tiempo, distancia, colisiones, ocio, combustible, restricciones) | En G, `anticipada_plus` baja J un 28 % |
 | Aprendizaje por refuerzo | Q-learning y SARSA para decidir cuándo pedir carro (mejora M1) | En G, SARSA baja el ocio un 37 % contra el umbral fijo |
-| Evaluación sin matemáticas analíticas | Escenarios, 20 seeds, IC 95 %, comparación pareada, reproducibilidad byte a byte | 1,232 corridas reportadas; 729 pruebas automáticas |
-| Gráficas computacionales | Vista 3D en Unity: mallas, relieve (heightmap), transformaciones, materiales, API REST | El Pueblito en 3D con su relieve y caminos reales; 55 pruebas EditMode |
+| Evaluación sin matemáticas analíticas | Escenarios, 20 seeds, IC 95 %, comparación pareada, reproducibilidad byte a byte | 1,232 corridas reportadas; 742 pruebas automáticas |
+| Gráficas computacionales | Vista 3D en Unity: mallas, relieve (heightmap), transformaciones, materiales, API REST | El Pueblito en 3D con su relieve y caminos reales; 69 pruebas EditMode |
 | Equilibrio de Nash (teoría de juegos) | Mejora M2 | Pendiente |
 
 ## 1. Agentes inteligentes (M1 del curso)
@@ -172,7 +172,7 @@ Todos los resultados salen de 1,232 corridas en 10 experimentos, con la misma se
 - **Comparación pareada:** cada estrategia se compara seed por seed contra una referencia (`base`, o `anticipada` en M1). Veredicto: mejora, empeora, igual o no concluyente (cuando el IC cruza el 0).
 - **Métricas desde el log:** ocio, completación, distancias, utilización del carro, colisiones, combustible, restricciones, J y, con mapa, la compactación del suelo. Ninguna se calcula dentro de la simulación: se recalculan del `trace.json`.
 - **Reproducibilidad:** la misma configuración y seed dan el mismo `trace.json` byte a byte; hay prueba para eso. `bash scripts/correr_todos.sh` regenera A–G, las gráficas, los experimentos y el dashboard en unos 2.5 minutos.
-- **Calidad:** 729 pruebas automáticas en GitHub Actions, incluida una regresión que exige que A, B y C den las métricas exactas de la primera entrega.
+- **Calidad:** 742 pruebas automáticas en GitHub Actions, incluida una regresión que exige que A, B y C den las métricas exactas de la primera entrega.
 
 | Experimento | Qué compara | Corridas |
 | --- | --- | --- |
@@ -204,11 +204,12 @@ Unity reproduce cualquier corrida en 3D sin decidir nada: solo dibuja lo que dic
 | Mallas | Las parcelas son mallas con sus esquinas apoyadas en el relieve. Los caminos del KML son franjas de 4 m hechas de triángulos, con inglete en las curvas; el orden de los vértices se escoge con el producto cruz para que la cara mire hacia arriba. |
 | Materiales y líneas | Materiales URP Lit para suelo, terracería y máquinas; los contornos de los lotes con LineRenderer. |
 | API REST y JSON | Servidor FastAPI (`servidor.py`) que corre escenarios y devuelve el trace en JSON; Unity lo pide con `TraceClient`. |
+| Despacho aprendido (M1) | Unity muestra cada decisión de la tabla Q (evento `DECISION_DESPACHO`): «Q: pide carro» en la placa y la última decisión con tolva, carros libres y valores Q en la tarjeta. El selector de estrategia ofrece `qlearning` y `sarsa` donde hay tabla. |
 | Visualización 2D | Visor en pygame con estelas, estados y mensajes; con mapa distingue camino, cultivo, rastrojo y lo que está fuera del predio. Gráficas en matplotlib y un dashboard HTML autocontenido. |
 
 **Resultados:**
 
-- 55 pruebas EditMode de Unity en verde: alturas iguales al trace, maíz solo en celdas de campo, caminos y contornos sobre el relieve y reproducción hasta el final.
+- 69 pruebas EditMode de Unity en verde: alturas iguales al trace, maíz solo en celdas de campo, caminos y contornos sobre el relieve, reproducción hasta el final y, para M1, las decisiones del despacho aprendido (placa, tarjeta, métricas y estrategias por escenario).
 - El campo real va de 1,705 a 1,716 m de altura, con pendiente media de 1.5 % y p95 de 5.2 %. El relieve sube el consumo de combustible un 1.6 % con el factor por defecto.
 - Cada dato externo lleva su fuente y licencia en el trace (`geo.atribucion`), y el HUD de Unity la muestra.
 

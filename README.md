@@ -206,7 +206,7 @@ python tools/entrenar_despacho.py config/escenario_g.json --algoritmo qlearning 
 python -m harvest_sim.cli config/escenario_g.json --estrategia qlearning                         # corre con la tabla, sin explorar
 ```
 
-En vez de pedir carro al pasar un umbral fijo, la cosechadora consulta una tabla Q aprendida (Q-learning o SARSA escritos por el equipo, con estados, acciones, recompensas y cliff). Está desactivada por defecto. Formulación: [`docs/especificacion_mejoras.md`](docs/especificacion_mejoras.md). Resultados: [`docs/resultados_mejoras.md`](docs/resultados_mejoras.md).
+En Unity se ven las decisiones (placa «Q: pide carro» y tarjeta con el estado y los valores Q); los traces de ejemplo están en `harvest-simu-visualization/Assets/Data/Traces/mejoras/`. En vez de pedir carro al pasar un umbral fijo, la cosechadora consulta una tabla Q aprendida (Q-learning o SARSA escritos por el equipo, con estados, acciones, recompensas y cliff). Está desactivada por defecto. Formulación: [`docs/especificacion_mejoras.md`](docs/especificacion_mejoras.md). Resultados: [`docs/resultados_mejoras.md`](docs/resultados_mejoras.md).
 
 ### Datos de ejemplo (sin la simulación)
 
@@ -270,7 +270,7 @@ Cada escenario es un JSON en `config/` (nada de valores fijos en el código):
 ## Pruebas y CI
 
 ```bash
-pytest                                                    # 729 pruebas
+pytest                                                    # 742 pruebas
 pytest tests/test_integracion.py                          # corridas completas de A–F (y D, E, F con las 4 estrategias)
 pytest tests/test_terreno_integracion.py                  # G completo: R10, R12, R13 y compactación del suelo
 python tools/verificar_terreno.py                         # G × 4 estrategias × 20 seeds (~3 min), revisado desde el trace
