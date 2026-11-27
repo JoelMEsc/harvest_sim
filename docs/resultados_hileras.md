@@ -74,6 +74,14 @@ En Unity:
 - la franja de tierra marca la orilla de la cabecera;
 - en cada vuelta, la máquina sigue la curva de Dubins que trae el trace (evento `TRAYECTORIA`), con una spline de Catmull-Rom.
 
+## M1 con hileras
+
+Las tablas de Q-learning y SARSA se reentrenaron sobre G con hileras. Contra el umbral fijo:
+- **SARSA:** −13.6 % de ocio y −6.4 % de tiempo (1869 ticks, más rápido que `anticipada_plus` con 1966);
+- **Q-learning:** −10.9 % de ocio y −2.0 % de tiempo.
+
+Detalle en `docs/resultados_mejoras.md` §M1.
+
 ## Limitaciones
 
 - **Una celda por tick para todos:** el carro debería ir más rápido que la cosechadora (10 contra 6 km/h). Su radio y su velocidad solo cuentan en el costo de los giros.
