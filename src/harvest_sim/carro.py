@@ -414,6 +414,12 @@ class Carro:
                 if libres:
                     self.objetivo = self._destino = libres[0]
                     self._avanzar(tick, mundo)
+                    return
+            if getattr(mundo, "hileras", False):
+                # espera quieto: suelta el plan viejo para no reservar una ruta que no va a tomar (esas reservas
+                # fantasma hacían que la cosechadora pospusiera su traslado para siempre)
+                self._plan = (None, [])
+                self.objetivo = self._destino = self.posicion
             return
         if objetivo is None:
             # Ninguna vecina libre por ahora (otros agentes alrededor): espera cerca.
@@ -668,6 +674,9 @@ class Carro:
         self._registrar_desvio(tick, mundo, bloqueadas, reservas)
         celda, _ = ruta[0]
         self._guardar_plan(ruta[1:])
+        if getattr(mundo, "hileras", False):
+            self.orientacion, self._giro = rutas.progreso_de_giro(
+                self.posicion, self.orientacion, ruta, *mundo.costos_de_giro(carro=True), getattr(self, "_giro", None))
         if celda != self.posicion:
             self._mover_a(celda)
         return self.posicion == self._destino

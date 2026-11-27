@@ -74,6 +74,7 @@ METRICAS_RESUMEN = [
     "distancia_total", "distancia_cosechadora_carro_promedio", "utilizacion_carro", "ticks_bloqueados",
     "num_ciclos", "tiempo_ocioso_total", "combustible_usado", "restricciones", "respuesta_promedio",
     "costo_total", "metros_carro_rastrojo", "metros_carro_cultivo", "metros_carro_camino",
+    "eficiencia_campo", "entradas_de_lado", "pasos_sobre_cultivo", "vueltas_instantaneas",
 ]
 
 # Sentido de cada métrica al comparar contra la línea base (decisión del 2026-11-16, ampliada el
@@ -91,6 +92,9 @@ SENTIDO_METRICAS = {
     "propuestas_por_servicio": "neutro", "respuesta_promedio": "menor", "costo_total": "menor",
     "metros_carro_rastrojo": "menor", "metros_carro_cultivo": "menor", "metros_carro_camino": "neutro",
     "porcentaje_carro_rastrojo": "menor",
+    # hileras: realismo del movimiento (menos es mejor) y eficiencia de campo (más es mejor)
+    "eficiencia_campo": "mayor", "entradas_de_lado": "menor", "pasos_sobre_cultivo": "menor",
+    "vueltas_instantaneas": "menor",
 }
 VEREDICTOS = ("mejora", "empeora", "igual", "no concluyente", "informativa", "sin datos")
 
