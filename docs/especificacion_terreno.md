@@ -241,3 +241,19 @@ En el trace, `config.mapa` queda como `{"archivo", "sha256"}`: el mapa completo 
 - **R13 casi nunca alarga una ruta en las corridas** (1 restricción por corrida en anticipada_plus): la cosecha avanza desde la entrada, así que el rastrojo une siempre los caminos con la cosechadora. Además, en la cuadrícula rodear por un camino en escalera mide lo mismo que cruzar (vecindad 4); R13 solo alarga las rutas que tienen que retroceder. La prueba `test_r13_se_registra_cuando_el_carro_rodea_el_cultivo` construye ese caso: llegar al camino (12, 23) sin pisar maíz cuesta 106 celdas más, y se registra la `RESTRICCION`.
 
 Los experimentos de P7 (estrategias, factor de pendiente y G con y sin R13, con la compactación del suelo) están en `docs/resultados_terreno.md`.
+
+## 14. Trace 2.4: hileras (plan de hileras y rutas)
+
+Con `politica.movimiento = "hileras"` el trace es **2.4**. Agrega a 2.3:
+
+| Campo | Contenido |
+|---|---|
+| `mundo.cabecera` | Celdas de cabecera: los extremos de las hileras (k = ceil(2R/s) celdas) y las orillas. Se cosechan primero. |
+| `mundo.pasadas` | Tramos de fila `[x0, y, x1]` a lo largo de las hileras. Cabecera + pasadas cubren el campo sin repetir. |
+| Evento `TRAYECTORIA` | Una vuelta de cabecera: `agente`, `tramo` (`vuelta`), `puntos` `[x, y, rumbo]` en metros del marco de la cuadrícula (la celda (c, f) está en (c·s, f·s); rumbo en radianes, 0 = +x) y `ticks` que dura. Es la curva de Dubins con el radio de giro; solo se emite en las vueltas de fin de pasada a una pasada cercana. |
+| `config.maquinas` | Radio de giro y velocidades de la cosechadora y del carro (supuestos documentados). |
+| `RESTRICCION R14_hileras` | La cosechadora iba a entrar de lado a una pasada y entró de frente desde la cabecera. |
+
+- **Métricas** (con mapa): `entradas_de_lado` (cuenta solo fuera de la cabecera), `pasos_sobre_cultivo`, `vueltas_instantaneas` y `eficiencia_campo`. Con hileras las tres primeras son 0 en G.
+- **Visor 2D:** muestra la cabecera en pie con otro color.
+- **Unity:** lee 2.4 desde H7.

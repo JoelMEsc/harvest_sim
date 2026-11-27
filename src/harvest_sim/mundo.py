@@ -358,6 +358,34 @@ class Mundo:
         return rutas.astar_rumbo_tiempo(origen, rumbo, destino, tick, self.ancho, self.alto, bloqueadas, reservas,
                                         giro90, giro180, horizonte, permanencia)
 
+    def trayectoria_de_vuelta(self, desde: Celda, rumbo_desde: str, celda: Celda, paso_m: float = 2.0) -> list[list[float]]:
+        """La curva de Dubins de la vuelta hacia la pasada que empieza en `celda`, muestreada cada `paso_m` metros:
+        [x, y, rumbo] en metros del marco de la cuadrícula (para el evento TRAYECTORIA del trace 2.4)."""
+        entrada = self._entradas.get(celda)
+        if entrada is None:
+            return []
+        s = self.tamano_celda_m
+        angulo = {"E": 0.0, "S": math.pi / 2, "O": math.pi, "N": 3 * math.pi / 2}
+        c = dubins.camino((desde[0] * s, desde[1] * s, angulo[rumbo_desde]),
+                          (celda[0] * s, celda[1] * s, angulo[entrada[1]]), self.config.maquinas["radio_giro_m"])
+        return [[round(x, 3), round(y, 3), round(t, 4)] for x, y, t in c.muestrear(paso_m)]
+
+    def es_vuelta_de_cabecera(self, desde: Celda, celda: Celda) -> bool:
+        """¿Ir de `desde` al inicio de pasada `celda` es una vuelta de cabecera? Sí si sale del fin de una pasada (no
+        de la cabecera) hacia otra a pocas filas y dentro del ancho de la cabecera; un traslado largo no es vuelta
+        (su ruta la decide el A* por rastrojo, no una curva que cruzaría el cultivo)."""
+        if celda not in self._entradas or desde in self.cabecera:
+            return False
+        k = cob.celdas_de_cabecera(self.config.maquinas["radio_giro_m"], self.tamano_celda_m)
+        return abs(celda[1] - desde[1]) <= 3 and abs(celda[0] - desde[0]) <= 2 * k + 1
+
+    def registrar_trayectoria(self, agent_id: str, tramo: str, puntos: list, ticks: int) -> None:
+        """2.4: deja en el log la geometría de una vuelta (evento TRAYECTORIA)."""
+        if agent_id not in self._agentes:
+            raise ValueError(f"agente no registrado: {agent_id}")
+        self._eventos.append({"tipo": "TRAYECTORIA", "agente": agent_id, "tramo": tramo, "puntos": puntos,
+                              "ticks": ticks})
+
     def entrada_de_pasada(self, celda: Celda) -> tuple[Celda, str] | None:
         """Si `celda` es el inicio de una pasada (con hileras): la celda de cabecera desde la que se entra y el
         rumbo de la pasada. R14: a una pasada se entra de frente, a lo largo de las hileras, nunca de lado."""
@@ -663,6 +691,10 @@ class Mundo:
         """Datos estáticos del mundo para el trace. La matriz `rendimiento` (alto × ancho, 0 en servicio
         y obstáculos) va solo si alguna celda da distinto de `grano_por_celda`."""
         descripcion = self._descripcion_sin_rendimiento()
+        if self.hileras and self._coberturas:
+            # 2.4: cabecera y pasadas (tramos de fila a lo largo de las hileras) para el visor y Unity
+            descripcion["cabecera"] = [list(c) for c in sorted(self.cabecera, key=lambda c: (c[1], c[0]))]
+            descripcion["pasadas"] = sorted([p.x0, p.y, p.x1] for r in self._coberturas.values() for p in r.pasadas)
         if any(v != self.grano_por_celda for v in self._rendimiento.values()):
             descripcion["rendimiento"] = [
                 [self._rendimiento.get((x, y), 0) for x in range(self.ancho)] for y in range(self.alto)

@@ -24,13 +24,14 @@ CULTIVO = "#dbbd57"
 COSECHADO = "#e6e4d6"
 SERVICIO = "#cdd8dc"
 CAMINO = "#b49a72"
+CABECERA = "#ecd99a"  # 2.4: cabecera todavía en pie (se cosecha primero, al abrir el campo)
 FUERA = "#fbfaf4"
 class Reproductor:
     """Conserva el estado entre ticks dispersos; retroceder reconstruye desde 0."""
 
     def __init__(self, trace):
-        if trace.get("schema_version") not in ("2.1", "2.2", "2.3"):
-            raise ValueError("se requiere un trace con schema_version 2.1, 2.2 o 2.3")
+        if trace.get("schema_version") not in ("2.1", "2.2", "2.3", "2.4"):
+            raise ValueError("se requiere un trace con schema_version 2.1, 2.2, 2.3 o 2.4")
         self.trace = trace
         self.total = trace["meta"]["total_ticks"]
         if type(self.total) is not int or self.total < 0:
@@ -123,6 +124,7 @@ def dibujar(rep, velocidad=8, pausa=True):
     con_mapa = any(k in mundo for k in ("caminos", "fuera_de_campo", "lotes"))
     caminos = {tuple(p) for p in mundo.get("caminos", [])}
     fuera = {tuple(p) for p in mundo.get("fuera_de_campo", [])}
+    cabecera = {tuple(p) for p in mundo.get("cabecera", [])}
     rendimiento = mundo.get("rendimiento")
     maximo = max((max(fila) for fila in rendimiento), default=0) if rendimiento else 0
     for y in range(alto):
@@ -130,7 +132,7 @@ def dibujar(rep, velocidad=8, pausa=True):
             pos = (x, y)
             servicio = pos in caminos if con_mapa else y == 0
             color = (FUERA if pos in fuera else CAMINO if servicio and con_mapa else SERVICIO if servicio
-                     else COSECHADO if pos in rep.cosechadas else CULTIVO)
+                     else COSECHADO if pos in rep.cosechadas else CABECERA if pos in cabecera else CULTIVO)
             if not servicio and pos not in fuera and pos not in rep.cosechadas and rendimiento and maximo:
                 color = pygame.Color(CULTIVO).lerp(pygame.Color("#a87917"), rendimiento[y][x] / maximo * .65)
             rect = pygame.Rect(28 + x * celda, 120 + y * celda, celda, celda)
@@ -187,6 +189,8 @@ def dibujar(rep, velocidad=8, pausa=True):
     if con_mapa:
         leyenda[2] = (CAMINO, "Camino")
         leyenda += [(FUERA, "Fuera del predio"), (TEXTO, "Bodega")]
+        if cabecera:
+            leyenda.append((CABECERA, "Cabecera en pie"))
     for i, (color, etiqueta) in enumerate(leyenda):
         x, y = 28 + (i % 2) * 220, ly + (i // 2) * 27
         pygame.draw.rect(superficie, color, (x, y, 14, 14))

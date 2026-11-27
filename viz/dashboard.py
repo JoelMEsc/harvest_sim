@@ -99,8 +99,8 @@ def generar_dashboard(carpetas, salida, comparacion=None, experimentos=None):
     for carpeta in carpetas:
         with (carpeta / "trace.json").open(encoding="utf-8") as archivo:
             trace = json.load(archivo)
-        if trace.get("schema_version") not in ("2.1", "2.2", "2.3"):
-            raise ValueError(f"{carpeta.name}: se requiere trace 2.1, 2.2 o 2.3")
+        if trace.get("schema_version") not in ("2.1", "2.2", "2.3", "2.4"):
+            raise ValueError(f"{carpeta.name}: se requiere trace 2.1, 2.2, 2.3 o 2.4")
         escenarios.append((carpeta, trace, trace["meta"]["escenario"]))
     versiones = ", ".join(sorted({trace["schema_version"] for _, trace, _ in escenarios}))
     partes = ['<!doctype html><html lang="es"><head><meta charset="utf-8">',

@@ -311,3 +311,56 @@ def test_costos_de_giro(mundo_g_hileras):
 def test_g_con_hileras_sin_vueltas_instantaneas(corrida_g_hileras):
     m = corrida_g_hileras["metricas"]
     assert m["vueltas_instantaneas"] == 0 and m["pasos_sobre_cultivo"] == 0 and m["colisiones"] == 0
+
+
+# --- H5: trace 2.4 (cabecera, pasadas y TRAYECTORIA) --------------------------------------------------------------
+
+import copy  # noqa: E402
+
+from harvest_sim.datos.trace import calcular_checksum  # noqa: E402
+
+
+def test_g_con_hileras_escribe_24(corrida_g_hileras):
+    t = corrida_g_hileras
+    assert t["schema_version"] == "2.4" and validar_trace(t) == []
+    m = t["mundo"]
+    cab = {tuple(c) for c in m["cabecera"]}
+    pasadas = [(x, p[1]) for p in m["pasadas"] for x in range(p[0], p[2] + 1)]
+    assert len(pasadas) == len(set(pasadas)) and not cab & set(pasadas)
+    assert len(cab) + len(pasadas) == t["metricas"]["grano_esperado_total"]
+    vueltas = [e for tk in t["ticks"] for e in tk["cambios"] if e["tipo"] == "TRAYECTORIA"]
+    assert vueltas and all(e["tramo"] == "vuelta" and 4 <= e["ticks"] <= 12 for e in vueltas)
+    assert t["metricas"]["entradas_de_lado"] == 0  # la cabecera no cuenta: ahí se corta de lado al abrir
+
+
+def test_sin_hileras_g_sigue_en_23():
+    from harvest_sim.datos.trace import TraceBuilder  # noqa: F401
+    c = cargar_config(RAIZ / "config" / "escenario_g.json")
+    assert "cabecera" not in Mundo(c).descripcion()
+
+
+def _invalido(t, cambio):
+    t = copy.deepcopy(t)
+    cambio(t)
+    for tick in t["ticks"]:
+        tick["checksum"] = calcular_checksum(tick)
+    return validar_trace(t)
+
+
+@pytest.mark.parametrize("cambio,patron", [
+    (lambda t: t.update(schema_version="2.3"), "requieren schema_version 2.4"),
+    (lambda t: t["mundo"]["pasadas"].pop(), "no cubren el campo"),
+    (lambda t: t["mundo"]["pasadas"].append(list(t["mundo"]["pasadas"][0])), "dos pasadas"),
+    (lambda t: t["mundo"].update(pasadas=[[3, 1]]), "x0 <= x1"),
+])
+def test_validador_24_mundo(corrida_g_hileras, cambio, patron):
+    assert any(patron in e for e in _invalido(corrida_g_hileras, cambio))
+
+
+def test_validador_24_trayectoria(corrida_g_hileras):
+    def romper(t):
+        e = next(e for tk in t["ticks"] for e in tk["cambios"] if e["tipo"] == "TRAYECTORIA")
+        e["puntos"] = [[0, 0, 0]]
+        e["tramo"] = "salto"
+    errores = _invalido(corrida_g_hileras, romper)
+    assert any("tramo debe ser" in e for e in errores) and any("al menos 2" in e for e in errores)

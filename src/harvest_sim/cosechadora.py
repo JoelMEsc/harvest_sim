@@ -175,6 +175,11 @@ class Cosechadora:
                 if entrada is not None:
                     self._vuelta_total = mundo.ticks_de_vuelta(self.posicion, self.orientacion, siguiente)
                     self._vuelta_ticks = 0
+                    if mundo.es_vuelta_de_cabecera(self.posicion, siguiente):
+                        # vuelta de fin de pasada a una pasada cercana: su curva va al log (2.4) para Unity
+                        puntos = mundo.trayectoria_de_vuelta(self.posicion, self.orientacion, siguiente)
+                        if len(puntos) >= 2:
+                            mundo.registrar_trayectoria(self.agent_id, "vuelta", puntos, max(1, self._vuelta_total))
                     if siguiente in mundo.vecinos(self.posicion):
                         # sin la regla habría entrado de lado a la pasada (cortando las hileras con el cabezal)
                         mundo.registrar_restriccion(
