@@ -113,6 +113,22 @@ Unity reproduce las corridas de `qlearning` y `sarsa` y muestra cada decisión d
 
 En el tick 81, la cosechadora 1 tiene la tolva al 60–80 % y los dos carros libres. La tabla vale −48 para seguir y −46 para pedir, así que pide (las líneas azules son su llamada a los dos carros). La cosechadora 2, con la tolva al 40–60 %, sigue cosechando.
 
+### Con hileras reales (G con `movimiento = "hileras"`)
+
+Con el movimiento por hileras (`docs/resultados_hileras.md`) la cosechadora abre la cabecera, cosecha a lo largo de las hileras y da vueltas con radio de giro, así que las tablas se reentrenaron en `escenario_g_hileras`: 60 episodios por algoritmo, seeds 1000 y siguientes. El experimento es `m1_despacho_hileras.json`: 20 seeds, pareado contra `anticipada`.
+
+| Estrategia | Ocio total | Completación (ticks) | Costo J | Combustible |
+|---|---|---|---|---|
+| anticipada (umbral 0.7) | 470 | 1996 | 8483 | 8036 |
+| subasta (umbral 1.0) | 821 (+75 %) | 2200 (+10 %) | 10201 (+20 %) | 7767 |
+| qlearning | 419 (−10.9 %) | 1956 (−2.0 %) | 8256 (−2.7 %) | 8161 (+1.6 %) |
+| **sarsa** | **406 (−13.6 %)** | **1869 (−6.4 %)** | **8224 (−3.1 %)** | 8312 (+3.4 %) |
+
+- **El aprendizaje sigue ganándole al umbral fijo, pero por menos que con celdas** (SARSA −13.6 % de ocio contra −37 %). Con hileras, buena parte del tiempo se va en vueltas y en abrir el campo, y eso no depende de cuándo se pide el carro.
+- **SARSA con hileras (1869 ticks) termina antes que `anticipada_plus` (1966)**, que además atiende desde la bodega y encadena servicios.
+- **Q-learning ahora sí mejora** (en G por celdas no convergía en 60 episodios). No se midió por qué; puede ser la otra dinámica del movimiento o simple variación entre entrenamientos.
+- **Ninguna estrategia aprendida pisa cultivo ni da vueltas de radio 0:** las reglas de hileras (R14, A* con rumbo) se cumplen sin importar quién decide el despacho.
+
 ### Limitaciones
 
 - **Una tabla por escenario:** no se probó si la de G sirve en otro campo real.
