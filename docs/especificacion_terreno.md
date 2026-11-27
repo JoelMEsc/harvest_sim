@@ -252,6 +252,7 @@ Con `politica.movimiento = "hileras"` el trace es **2.4**. Agrega a 2.3:
 | `mundo.pasadas` | Tramos de fila `[x0, y, x1]` a lo largo de las hileras. Cabecera + pasadas cubren el campo sin repetir. |
 | Evento `TRAYECTORIA` | Una vuelta de cabecera: `agente`, `tramo` (`vuelta`), `puntos` `[x, y, rumbo]` en metros del marco de la cuadrícula (la celda (c, f) está en (c·s, f·s); rumbo en radianes, 0 = +x) y `ticks` que dura. Es la curva de Dubins con el radio de giro; solo se emite en las vueltas de fin de pasada a una pasada cercana. |
 | `config.maquinas` | Radio de giro y velocidades de la cosechadora y del carro (supuestos documentados). |
+| Estado del carro `RECIBIENDO_EN_MARCHA` | H6 (`politica.descarga_en_marcha`): va al lado de la cosechadora, a su altura y en la fila vecina, y recibe grano mientras ella sigue cosechando. Métricas `grano_en_marcha`, `descargas_en_marcha` y `ticks_en_marcha`. |
 | `RESTRICCION R14_hileras` | La cosechadora iba a entrar de lado a una pasada y entró de frente desde la cabecera. |
 
 - **Métricas** (con mapa): `entradas_de_lado` (cuenta solo fuera de la cabecera), `pasos_sobre_cultivo`, `vueltas_instantaneas` y `eficiencia_campo`. Con hileras las tres primeras son 0 en G.

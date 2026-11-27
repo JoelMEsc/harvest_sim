@@ -80,6 +80,7 @@ class EstadoCarro(str, Enum):
     YENDO_A_BODEGA = "YENDO_A_BODEGA"
     DESCARGANDO = "DESCARGANDO"
     REGRESANDO_A_BASE = "REGRESANDO_A_BASE"
+    RECIBIENDO_EN_MARCHA = "RECIBIENDO_EN_MARCHA"  # H6: al lado de la cosechadora, recibiendo sin detenerse
 
 
 def duracion_descarga(cantidad: int, tasa: int) -> int:
@@ -205,7 +206,8 @@ class Carro:
             if self.servicios and self._listo_para_salir(mundo):
                 self.estado = EstadoCarro.YENDO_A_COSECHADORA
 
-        elif self.estado in (EstadoCarro.YENDO_A_COSECHADORA, EstadoCarro.ESPERANDO_TRANSFERENCIA):
+        elif self.estado in (EstadoCarro.YENDO_A_COSECHADORA, EstadoCarro.ESPERANDO_TRANSFERENCIA,
+                             EstadoCarro.RECIBIENDO_EN_MARCHA):
             self._acompanar(tick, mundo)
 
         elif self.estado == EstadoCarro.YENDO_A_BODEGA:
@@ -376,6 +378,9 @@ class Carro:
         servicio = self.servicios[0]
         cosechadora = servicio["cosechadora"]
         pos_cosechadora = mundo.posicion(cosechadora)
+
+        if self._politica(mundo).get("descarga_en_marcha") and self._en_marcha(tick, mundo, cosechadora):
+            return
 
         if (self.posicion in mundo.vecinos(pos_cosechadora)
                 and mundo.estado_de(cosechadora) in ESPERANDO_CARRO):
@@ -978,6 +983,73 @@ class Carro:
     def _reserva(self, mundo: Mundo) -> float:
         combustible = getattr(getattr(mundo, "config", None), "combustible", None) or {}
         return combustible.get("reserva", RESERVA_POR_DEFECTO)
+
+    def _en_marcha(self, tick: int, mundo: Mundo, cosechadora: str) -> bool:
+        """H6, descarga en marcha (como Machine Sync o Raven Cart Automation). Devuelve True si ya decidió qué hacer
+        este tick; False = el comportamiento de siempre (transferencia detenida).
+
+        - Si la cosechadora cosecha una pasada, el carro busca una «cita» en el lateral: la primera celda de rastrojo
+          junto a la pasada, más adelante de ella, a la que llegue antes que ella. Ahí espera apuntando como ella.
+        - Cuando ella llega a su altura, pasa a RECIBIENDO_EN_MARCHA: cada tick ella le pasa grano y avanza, y el
+          carro avanza a su lado. Si pierde el paso (fin de pasada, el lateral en pie o algo enfrente), vuelve a
+          la transferencia de siempre."""
+        recibiendo = self.estado == EstadoCarro.RECIBIENDO_EN_MARCHA
+        if (mundo.estado_de(cosechadora) not in ("COSECHANDO", "YENDO_A_CAMPO")
+                or not mundo.espera_descarga_de(cosechadora, self.agent_id)):
+            if recibiendo:
+                self.estado = EstadoCarro.YENDO_A_COSECHADORA
+            return False
+        pasada = mundo.pasada_restante(cosechadora)
+        if pasada is None and recibiendo:
+            self.estado = EstadoCarro.YENDO_A_COSECHADORA  # ella terminó la pasada: busca cita en la siguiente
+            recibiendo = False
+        rumbo = pasada[0] if pasada else mundo.proximas_pasadas(cosechadora)[0][0] if mundo.proximas_pasadas(cosechadora) else "E"
+        hx, hy = mundo.posicion(cosechadora)
+        dx = 1 if rumbo == "E" else -1
+        prohibidas = (self._bloqueadas(mundo) | self._obstaculos(mundo) | {mundo.bodega}
+                      | mundo.ocupadas(self.agent_id))
+
+        def lado_libre(celda: Celda) -> bool:
+            return 0 <= celda[0] < mundo.ancho and 0 <= celda[1] < mundo.alto and celda not in prohibidas
+
+        if pasada is not None and self.posicion in ((hx, hy - 1), (hx, hy + 1)):
+            # a su altura: recibe en marcha (la cosechadora transfiere al empezar su siguiente paso)
+            self.estado = EstadoCarro.RECIBIENDO_EN_MARCHA
+            self.orientacion = rumbo
+            self.objetivo = self._destino = self.posicion
+            self._plan = (None, [])
+            return True
+        if recibiendo:
+            # ella ya avanzó este tick: el carro avanza a su lado si la celda está libre
+            ys = self.posicion[1]
+            junto = (hx, ys)
+            if self.posicion == (hx - dx, ys) and lado_libre(junto) and (junto, tick) not in mundo.reservas(
+                    excepto=self.agent_id):
+                self._mover_a(junto)
+                self.objetivo = self._destino = junto
+                self._plan = (None, [])
+                return True
+            self.estado = EstadoCarro.YENDO_A_COSECHADORA  # perdió el paso: vuelve a buscar cita o a lo de siempre
+        # cita: la primera celda de rastrojo junto a una pasada (la actual o la siguiente, después de la vuelta) a la
+        # que el carro llega antes que ella; la espera apuntando como ella va a pasar
+        dist = rutas.distancias(self.posicion, mundo.ancho, mundo.alto, prohibidas - {self.posicion})
+        for rumbo_pasada, celdas, llegada in mundo.proximas_pasadas(cosechadora):
+            for i, (cx, cy) in enumerate(celdas):
+                j = llegada + i
+                for ys in (cy - 1, cy + 1):
+                    cita = (cx, ys)
+                    if lado_libre(cita) and dist.get(cita, j) <= j - 1:
+                        if self.posicion == cita:
+                            self.estado = EstadoCarro.ESPERANDO_TRANSFERENCIA
+                            self.orientacion = rumbo_pasada
+                            self.objetivo = self._destino = cita
+                            self._plan = (None, [])
+                            return True
+                        self.estado = EstadoCarro.YENDO_A_COSECHADORA
+                        self.objetivo = self._destino = cita
+                        self._avanzar(tick, mundo)
+                        return True
+        return False
 
     def _fuera_del_paso(self, mundo: Mundo, paso: set[Celda], prohibidas: set[Celda]) -> list[Celda]:
         """La celda más cercana (BFS por donde el carro puede andar) que no está en `paso`; [] si no hay."""

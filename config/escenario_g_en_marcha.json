@@ -1,0 +1,18 @@
+{
+  "nombre": "escenario_g_en_marcha",
+  "seed": 0,
+  "num_carros": 2,
+  "num_cosechadoras": 2,
+  "grano_por_celda": 1,
+  "capacidad_cosechadora": 120,
+  "capacidad_carro": 360,
+  "tasa_transferencia": 12,
+  "tasa_descarga": 24,
+  "max_ticks": 20000,
+  "mapa": "mapas/el_pueblito.json",
+  "politica": {
+    "respetar_cultivo": true,
+    "movimiento": "hileras",
+    "descarga_en_marcha": true
+  }
+}

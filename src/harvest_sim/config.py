@@ -35,6 +35,10 @@ POLITICA_POR_DEFECTO = {
     # Plan de hileras y rutas: "celdas" = el movimiento de siempre (por celdas, BFS); "hileras" = cabeceras,
     # pasadas paralelas a las hileras, vueltas con radio de giro y A* con rumbo. Desactivado por defecto.
     "movimiento": "celdas",
+    # H6, descarga en marcha (como Machine Sync o Raven Cart Automation): el carro se pone al lado de la
+    # cosechadora, sobre el rastrojo, y recibe el grano mientras ella sigue cosechando. Requiere hileras y
+    # subasta (con asignación directa no tiene efecto). Desactivada por defecto.
+    "descarga_en_marcha": False,
 }
 INCERTIDUMBRE_POR_DEFECTO = {
     # None = {minimo: grano_por_celda, maximo: grano_por_celda}: depende de otro campo
@@ -182,7 +186,7 @@ def _validar_secciones(datos: dict) -> None:
         raise ValueError(f"config: politica.asignacion debe ser una de {list(ASIGNACIONES)}")
     if not _es_numero(pol["umbral_aviso"]) or not 0 < pol["umbral_aviso"] <= 1:
         raise ValueError("config: politica.umbral_aviso debe estar en (0, 1]")
-    for clave in ("atender_desde_bodega", "encadenar_servicios", "respetar_cultivo"):
+    for clave in ("atender_desde_bodega", "encadenar_servicios", "respetar_cultivo", "descarga_en_marcha"):
         if not isinstance(pol[clave], bool):
             raise ValueError(f"config: politica.{clave} debe ser true o false")
     for clave, valor in datos["maquinas"].items():
@@ -318,6 +322,9 @@ def cargar_config(ruta: str | Path) -> Config:
     datos["costo"] = _con_defectos("costo", datos.get("costo"), COSTO_POR_DEFECTO)
     datos["maquinas"] = _con_defectos("maquinas", datos.get("maquinas"), MAQUINAS_POR_DEFECTO)
     _validar_secciones(datos)
+    if datos["politica"]["descarga_en_marcha"] and datos["politica"]["movimiento"] != "hileras":
+        # solo actúa con asignacion = subasta (el carro con servicio contratado); con directa no tiene efecto
+        raise ValueError("config: politica.descarga_en_marcha requiere movimiento = hileras")
     if datos["politica"]["movimiento"] == "hileras" and datos.get("mapa") is None:
         raise ValueError("config: politica.movimiento = hileras requiere un mapa (las hileras y los lotes vienen de él)")
 

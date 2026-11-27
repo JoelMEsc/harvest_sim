@@ -393,3 +393,76 @@ def test_g_con_hileras_y_despacho_anticipado_termina(estrategia):
     logging.disable(logging.NOTSET)
     m = trace["metricas"]
     assert m["porcentaje_entregado"] == 100.0 and m["colisiones"] == 0 and m["vueltas_instantaneas"] == 0
+
+
+# --- H6: descarga en marcha ---------------------------------------------------------------------------------------
+
+from harvest_sim.datos.metricas import descarga_en_marcha  # noqa: E402
+
+
+def test_descarga_en_marcha_requiere_hileras(tmp_path):
+    datos = json.loads((RAIZ / "config" / "escenario_g.json").read_text(encoding="utf-8"))
+    datos["politica"] = {**datos.get("politica", {}), "descarga_en_marcha": True, "asignacion": "subasta"}
+    ruta = tmp_path / "g.json"
+    ruta.write_text(json.dumps(datos), encoding="utf-8")
+    with pytest.raises(ValueError, match="descarga_en_marcha requiere"):
+        cargar_config(ruta)  # sin hileras
+    datos["politica"].update(movimiento="hileras")
+    datos["mapa"] = str((RAIZ / "config" / "mapas" / "el_pueblito.json").resolve())
+    ruta.write_text(json.dumps(datos), encoding="utf-8")
+    assert cargar_config(ruta).politica["descarga_en_marcha"] is True
+
+
+@pytest.fixture(scope="module")
+def corridas_en_marcha():
+    logging.disable(logging.WARNING)
+    base = json.loads((RAIZ / "config" / "escenario_g_hileras.json").read_text(encoding="utf-8"))
+    resultado = {}
+    for en_marcha in (False, True):
+        config = aplicar_estrategia(base, "anticipada")
+        config["politica"]["descarga_en_marcha"] = en_marcha
+        resultado[en_marcha] = simulador_real(config)
+    logging.disable(logging.NOTSET)
+    return resultado
+
+
+def test_en_marcha_termina_valida_y_baja_el_ocio(corridas_en_marcha):
+    detenida, en_marcha = corridas_en_marcha[False]["metricas"], corridas_en_marcha[True]["metricas"]
+    assert validar_trace(corridas_en_marcha[True]) == []
+    assert en_marcha["porcentaje_entregado"] == 100.0 and en_marcha["colisiones"] == 0
+    assert en_marcha["pasos_sobre_cultivo"] == 0 and en_marcha["metros_carro_cultivo"] == 0
+    assert en_marcha["grano_en_marcha"] > 0 and en_marcha["descargas_en_marcha"] > 0
+    assert en_marcha["tiempo_ocioso_total"] < detenida["tiempo_ocioso_total"]
+    assert "grano_en_marcha" not in detenida  # sin la bandera, las métricas de siempre
+
+
+def test_solo_recibe_en_marcha_al_lado_de_la_cosechadora(corridas_en_marcha):
+    """Cada vez que un carro recibe grano en RECIBIENDO_EN_MARCHA, venía a la altura de una cosechadora, en la
+    fila de al lado (sobre rastrojo), y ella siguió cosechando: nunca se detuvo a transferir."""
+    t = corridas_en_marcha[True]
+    pos, estado, carga = {}, {}, {}
+    recibidas = 0
+    for tick in t["ticks"]:
+        antes_pos, antes_estado, antes_carga = dict(pos), dict(estado), dict(carga)
+        for e in tick["cambios"]:
+            if e["tipo"] == "AGENTE":
+                s = e["set"]
+                if "pose" in s:
+                    pos[e["id"]] = (s["pose"]["x"], s["pose"]["y"])
+                if "estado" in s:
+                    estado[e["id"]] = s["estado"]
+                if "carga" in s:
+                    carga[e["id"]] = s["carga"]
+        for a in [x for x in carga if x.startswith("carro")]:
+            if antes_estado.get(a) == "RECIBIENDO_EN_MARCHA" and carga[a] > antes_carga.get(a, carga[a]):
+                recibidas += 1
+                cx, cy = antes_pos[a]
+                lado = [c for c in antes_pos if c.startswith("cosechadora") and antes_pos[c][0] == cx
+                        and abs(antes_pos[c][1] - cy) == 1]
+                assert lado, f"tick {tick['tick']}: {a} recibió sin ir al lado de una cosechadora"
+                assert all(estado[c] == "COSECHANDO" for c in lado)
+    assert recibidas > 0
+
+
+def test_metrica_de_descarga_en_marcha_vacia_sin_bandera(corridas_en_marcha):
+    assert descarga_en_marcha(corridas_en_marcha[False]) == {}
