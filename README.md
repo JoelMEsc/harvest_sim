@@ -334,6 +334,8 @@ runs/                    salidas de las corridas (no se versionan)
 
 | Documento | Para qué |
 |---|---|
+| [`docs/estado_y_pendientes.md`](docs/estado_y_pendientes.md) | **Para continuar:** dónde quedó todo, cómo correrlo, forma de trabajo y pendientes en orden (M2–M12, propuestas de la retro, limitaciones) |
+| [`docs/planes/`](docs/planes/) | Planes detallados (terreno, hileras, M1 en Unity, segunda entrega) y bitácora paso a paso |
 | [`docs/temas_del_curso.md`](docs/temas_del_curso.md) | Cada tema del curso TC2008B (multiagentes y gráficas): dónde se usa, cómo y con qué resultado; lo que falta |
 | [`docs/resultados_hileras.md`](docs/resultados_hileras.md) | Hileras reales y rutas de la industria (Fields2Cover, Dubins, A* con rumbo): G por celdas contra G por hileras |
 | [`docs/resultados_terreno.md`](docs/resultados_terreno.md) | Resultados del campo real (escenario G): estrategias, factor de pendiente, R13 y compactación del suelo |
