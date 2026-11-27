@@ -320,3 +320,9 @@ Formato por entrada:
   - Girar 90° cuesta el cuarto de circunferencia a su velocidad. La media vuelta es una vuelta en K de varios ticks: 4 la cosechadora; el carro (R = 6 m, 10 km/h), 0 y 2.
   - En G con `anticipada_plus` pasa de 29 vueltas de 180° en un tick a 0, y termina en 1999 ticks con 454 de ocio.
   - La métrica cuenta como instantánea solo la inversión sin al menos 2 ticks detenida.
+- **H7 y H8, con dos arreglos:**
+  - **Escenario nuevo `escenario_g_hileras`:** es G con `movimiento = "hileras"`, para el servidor y Unity.
+  - **Atasco 1, el carro que espera:** al combinar hileras con despacho anticipado aparecieron atascos. El carro que espera a la cosechadora en traslado ahora se aparta de **toda** su ruta, no solo de los dos pasos siguientes, y suelta su plan viejo para no dejar reservas fantasma.
+  - **Atasco 2, el giro en el sitio:** ahora acumula su avance (`rutas.progreso_de_giro`). Antes, al replanear cada tick, la máquina empezaba el giro desde cero y nunca salía.
+  - **Sin la bandera nada cambia.** Resultados en `docs/resultados_hileras.md`.
+

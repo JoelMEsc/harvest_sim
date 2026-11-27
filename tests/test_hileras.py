@@ -364,3 +364,32 @@ def test_validador_24_trayectoria(corrida_g_hileras):
         e["tramo"] = "salto"
     errores = _invalido(corrida_g_hileras, romper)
     assert any("tramo debe ser" in e for e in errores) and any("al menos 2" in e for e in errores)
+
+
+def test_el_giro_en_el_sitio_avanza_aunque_se_replanee():
+    """Regresión: al replanear cada tick, la máquina empezaba su giro de 90° desde cero y nunca salía. El giro
+    acumula los ticks que pasa en su celda y, al completarlos, queda apuntando al rumbo nuevo."""
+    plan = [((5, 5), 1), ((4, 5), 2)]  # quedarse 1 tick y salir hacia el oeste
+    assert rutas.progreso_de_giro((5, 5), "N", plan, 1, 4, None) == ("O", None)
+    # media vuelta: 4 ticks; tras 1 y 3 sigue pendiente, al 4° queda al revés
+    atras = [((5, 5), 1), ((5, 6), 2)]
+    rumbo, giro = rutas.progreso_de_giro((5, 5), "N", atras, 1, 4, None)
+    assert (rumbo, giro) == ("N", ("S", 1))
+    for _ in range(2):
+        rumbo, giro = rutas.progreso_de_giro((5, 5), rumbo, atras, 1, 4, giro)
+    assert (rumbo, giro) == ("N", ("S", 3))
+    assert rutas.progreso_de_giro((5, 5), rumbo, atras, 1, 4, giro) == ("S", None)
+    # si se mueve, no hay giro pendiente
+    assert rutas.progreso_de_giro((5, 5), "N", [((5, 4), 1)], 1, 4, ("S", 2)) == ("N", None)
+
+
+@pytest.mark.parametrize("estrategia", ["anticipada", "anticipada_plus"])
+def test_g_con_hileras_y_despacho_anticipado_termina(estrategia):
+    """Regresión: el carro que espera a la cosechadora en traslado soltaba mal su plan y ella replaneaba su giro
+    para siempre. Con despacho anticipado (el carro llega antes) la corrida tiene que terminar."""
+    logging.disable(logging.WARNING)
+    base = json.loads((RAIZ / "config" / "escenario_g_hileras.json").read_text(encoding="utf-8"))
+    trace = simulador_real({**aplicar_estrategia(base, estrategia), "seed": 1})
+    logging.disable(logging.NOTSET)
+    m = trace["metricas"]
+    assert m["porcentaje_entregado"] == 100.0 and m["colisiones"] == 0 and m["vueltas_instantaneas"] == 0

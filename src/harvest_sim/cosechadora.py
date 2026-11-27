@@ -87,6 +87,7 @@ class Cosechadora:
         self._vuelta_total: int | None = None
         self._vuelta_ticks = 0
         self.ticks_en_vueltas = 0
+        self._giro: tuple[str, int] | None = None  # giro en el sitio en curso (A* con rumbo)
 
         # Administración del servicio (§7).
         self._num_servicio = 0
@@ -327,6 +328,10 @@ class Cosechadora:
             return set()
         destino = self._retorno or self._entrada(self._camino[self._siguiente], mundo) or self._camino[self._siguiente]
         ruta = rutas.bfs(self.posicion, destino, mundo.ancho, mundo.alto, self._bloqueadas_traslado(destino, mundo)[0])
+        if getattr(mundo, "hileras", False):
+            # con hileras el carro no la persigue mientras se traslada, sino que espera: tiene que esperar fuera de
+            # toda su ruta (en un camino o un pasillo de una celda bloquearía a cualquier distancia)
+            return {destino} | set(ruta or [])
         return {destino} | set((ruta or [])[:2])
 
     def _cabe(self, celda: Celda, mundo: Mundo) -> bool:
@@ -566,6 +571,9 @@ class Cosechadora:
         self._registrar_desvio(tick, destino, mundo, bloqueadas, reservas)
         celda, _ = plan[0]
         self._plan = plan[1:]
+        if getattr(mundo, "hileras", False):
+            self.orientacion, self._giro = rutas.progreso_de_giro(
+                self.posicion, self.orientacion, plan, *mundo.costos_de_giro(), self._giro)
         if celda != self.posicion:
             self._mover_a(celda)
             return True

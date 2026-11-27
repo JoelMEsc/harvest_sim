@@ -509,3 +509,30 @@ def _reconstruir_rumbo(padre: dict, final, origen: Celda, tick: int) -> list[Pas
         plan.append((celda, t))
         actual = celda
     return plan
+
+
+def progreso_de_giro(
+    posicion: Celda,
+    rumbo: str,
+    plan: list[PasoEnTiempo],
+    giro90: int,
+    giro180: int,
+    giro: tuple[str, int] | None,
+) -> tuple[str, tuple[str, int] | None]:
+    """Avance de un giro en el sitio (hileras). Si en este tick la máquina se queda en su celda (`plan[0]`) y su
+    siguiente movimiento va hacia otro rumbo, este tick cuenta como parte del giro; cuando acumula los ticks del
+    giro (`giro90` o `giro180` para media vuelta) queda apuntando al rumbo nuevo. Sin esto, al replanear la
+    máquina empezaba el giro desde cero cada tick y nunca salía. Devuelve (rumbo, giro pendiente o None)."""
+    if not plan or plan[0][0] != posicion:
+        return rumbo, None
+    siguiente = next((celda for celda, _ in plan if celda != posicion), None)
+    if siguiente is None:
+        return rumbo, giro
+    nuevo = _DELTA_A_RUMBO.get((siguiente[0] - posicion[0], siguiente[1] - posicion[1]))
+    if nuevo is None or nuevo == rumbo:
+        return rumbo, None
+    necesarios = giro180 if nuevo == _OPUESTO[rumbo] else giro90
+    hechos = giro[1] + 1 if giro is not None and giro[0] == nuevo else 1
+    if hechos >= necesarios:
+        return nuevo, None
+    return rumbo, (nuevo, hechos)

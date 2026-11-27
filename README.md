@@ -49,6 +49,8 @@ python -m harvest_sim.cli config/escenario_g.json --estrategia anticipada_plus  
 python tools/correr_experimento.py config/experimentos/estrategias.json --procesos 8   # D, E, F × 4 estrategias × 20 seeds
 python tools/correr_experimento.py config/experimentos/terreno_g_estrategias.json --procesos 8   # G (campo real) × 4 estrategias × 20 seeds
 python tools/verificar_terreno.py                                                       # reglas R10, R12 y R13 en G desde el trace
+python -m harvest_sim.cli config/escenario_g_hileras.json --estrategia anticipada_plus     # G con hileras: cabecera, pasadas, vueltas Dubins (trace 2.4)
+python tools/verificar_terreno.py --movimiento hileras                                   # lo mismo con hileras (y R14)
 python tools/kml_a_mapa.py --figura                                                     # regenera config/mapas/el_pueblito.json desde el KML
 ```
 
@@ -332,6 +334,7 @@ runs/                    salidas de las corridas (no se versionan)
 | Documento | Para qué |
 |---|---|
 | [`docs/temas_del_curso.md`](docs/temas_del_curso.md) | Cada tema del curso TC2008B (multiagentes y gráficas): dónde se usa, cómo y con qué resultado; lo que falta |
+| [`docs/resultados_hileras.md`](docs/resultados_hileras.md) | Hileras reales y rutas de la industria (Fields2Cover, Dubins, A* con rumbo): G por celdas contra G por hileras |
 | [`docs/resultados_terreno.md`](docs/resultados_terreno.md) | Resultados del campo real (escenario G): estrategias, factor de pendiente, R13 y compactación del suelo |
 | [`docs/especificacion_terreno.md`](docs/especificacion_terreno.md) | Terreno real: KML a mapa, trace 2.3, reglas R12 y R13, relieve, zonas, escenario G y Unity |
 | [`docs/especificacion_mejoras.md`](docs/especificacion_mejoras.md), [`docs/resultados_mejoras.md`](docs/resultados_mejoras.md) | Mejoras M1–M12: formulación y resultados |

@@ -1,0 +1,9 @@
+{
+  "nombre": "hileras_g",
+  "descripcion": "Plan de hileras y rutas (H8): G con el movimiento por celdas (BFS, sin hileras) contra el movimiento por hileras (cabecera, pasadas a lo largo de las hileras, vueltas Dubins y A* con rumbo), con las 4 estrategias y 20 seeds. Mide qué tan realista es el movimiento y cuánto cuesta en tiempo, ocio y combustible.",
+  "escenarios": ["config/escenario_g.json"],
+  "estrategias": ["base", "subasta", "anticipada", "anticipada_plus"],
+  "barrido": {"politica.movimiento": ["celdas", "hileras"]},
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_completacion"
+}
