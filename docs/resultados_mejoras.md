@@ -126,7 +126,7 @@ Con el movimiento por hileras (`docs/resultados_hileras.md`) la cosechadora abre
 
 - **El aprendizaje sigue ganándole al umbral fijo, pero por menos que con celdas** (SARSA −13.6 % de ocio contra −37 %). Con hileras, buena parte del tiempo se va en vueltas y en abrir el campo, y eso no depende de cuándo se pide el carro.
 - **SARSA con hileras (1869 ticks) termina antes que `anticipada_plus` (1966)**, que además atiende desde la bodega y encadena servicios.
-- **Q-learning ahora sí mejora** (antes, en G por celdas, no convergía). Con el giro en el sitio corregido, los episodios son más parecidos entre sí.
+- **Q-learning ahora sí mejora** (en G por celdas no convergía en 60 episodios). No se midió por qué; puede ser la otra dinámica del movimiento o simple variación entre entrenamientos.
 - **Ninguna estrategia aprendida pisa cultivo ni da vueltas de radio 0:** las reglas de hileras (R14, A* con rumbo) se cumplen sin importar quién decide el despacho.
 
 ### Limitaciones
