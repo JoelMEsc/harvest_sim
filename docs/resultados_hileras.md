@@ -82,9 +82,36 @@ Las tablas de Q-learning y SARSA se reentrenaron sobre G con hileras. Contra el 
 
 Detalle en `docs/resultados_mejoras.md` §M1.
 
+## H6: descarga en marcha
+
+Antes, la cosechadora se detenía a transferir. En la industria, el carro se sincroniza al lado de ella y recibe el grano sin que se detenga ([John Deere Machine Sync](https://www.deere.com/en/technology-products/precision-ag-technology/guidance/machine-sync/), [Case IH Raven Cart Automation](https://www.caseih.com/en-us/unitedstates/connect-with-us/farm-forum/improve-harvest-efficiency-with-raven-cart-automation)).
+
+Con `politica.descarga_en_marcha` (escenario `escenario_g_en_marcha`):
+1. **Cita en el lateral:** el carro calcula la primera celda de rastrojo junto a la pasada actual, o junto a la siguiente después de la vuelta, a la que llega antes que la cosechadora. Ahí la espera apuntando hacia donde ella va.
+2. **Descarga:** cuando ella llega a su altura, el carro pasa a `RECIBIENDO_EN_MARCHA`. Cada tick ella le pasa grano (la tasa de transferencia) y los dos avanzan en paralelo.
+3. **Si pierden la alineación** (fin de pasada, lateral en pie, algo enfrente), se busca otra cita o se vuelve a la transferencia detenida de siempre.
+
+Solo actúa con las estrategias de subasta; con `base` no cambia nada.
+
+Experimento `hileras_g_en_marcha.json` (20 seeds; diferencia contra la transferencia detenida):
+
+| Estrategia | Ocio | Completación | Costo J | Grano en marcha |
+|---|---|---|---|---|
+| anticipada | 470 → 380 (−19 %) | 1996 → 1939 (−2.9 %) | −6.3 % | 447 de 1772 (25 %) |
+| anticipada_plus | 433 → 340 (−21 %) | 1966 → 1897 (−3.5 %) | −7.2 % | 566 (32 %) |
+| sarsa | 406 → 368 (−9 %) | 1869 → 2056 (+10 %) | −2.9 % | 1011 (57 %) |
+| qlearning | 419 → 420 (=) | 1956 → 2045 (+4.5 %) | +0.7 % | 622 (35 %) |
+
+- **Con umbral fijo, descargar en marcha mejora todo:** menos ocio, menos tiempo, menos combustible y menor J. `anticipada_plus` en marcha (1897 ticks, 340 de ocio) es la mejor combinación con hileras.
+- **Las estrategias aprendidas no se reentrenaron con la descarga en marcha:** sus tablas aprendieron cuándo pedir el carro con la transferencia detenida. Por eso SARSA mueve más grano en marcha y baja el ocio, pero termina más tarde. Reentrenarlas con la bandera es el siguiente paso natural.
+- **Las sesiones en marcha son cortas** (≈3 ticks): las pasadas de El Pueblito son cortas y la cita suele quedar cerca del final. La descarga sigue en la pasada siguiente.
+- **Reglas:** 0 colisiones, 0 bloqueos y 0 metros de carro sobre cultivo; el carro solo va por rastrojo (R13).
+
 ## Limitaciones
 
 - **Una celda por tick para todos:** el carro debería ir más rápido que la cosechadora (10 contra 6 km/h). Su radio y su velocidad solo cuentan en el costo de los giros.
 - **Cabecera de una celda en las orillas paralelas a las hileras:** es suficiente para pasar, pero en lotes angostos el carro puede quedar detrás de la cosechadora. Entonces se aparta de toda su ruta y espera. Esa espera sin plan, y el giro que acumula su avance aunque se replanee, se agregaron después de encontrar dos atascos al combinar hileras con despacho anticipado.
-- **Descarga en marcha (fase H6):** pendiente. Hoy la cosechadora se detiene a transferir; en la industria el carro va al lado y ella sigue cosechando. Cambia la métrica principal, así que va con su propia bandera.
+- **Descarga en marcha (H6):**
+    - el carro avanza una celda por tick, igual que la cosechadora, así que si se queda atrás no la alcanza en la misma pasada;
+    - el modelo no mide la posición del sinfín ni el llenado del carro, que sí miden los sistemas reales.
 - **Supuestos sin calibrar con una máquina real:** el radio de giro y las velocidades son valores típicos. Medirlos en El Pueblito daría números absolutos más confiables.

@@ -290,6 +290,7 @@ def calcular_metricas(fuente) -> dict:
     if tiene_mapa(linea.mundo):
         metricas.update(suelo_de_carros(linea))
         metricas.update(movimiento_cosechadoras(linea))
+    metricas.update(descarga_en_marcha(linea))
     if decisiones:
         metricas.update(
             decisiones_despacho=sum(decisiones.values()),
@@ -347,6 +348,27 @@ def movimiento_cosechadoras(fuente) -> dict:
         cosechadas |= nuevas
     return {"entradas_de_lado": lado, "pasos_sobre_cultivo": pisadas, "vueltas_instantaneas": vueltas,
             "eficiencia_campo": round(100 * len(cosechadas) / activos, 2) if activos else None}
+
+
+def descarga_en_marcha(fuente) -> dict:
+    """H6: cuánto grano recibieron los carros mientras iban al lado de la cosechadora (estado
+    RECIBIENDO_EN_MARCHA) y cuántas veces entraron a ese estado. {} si ningún carro descargó en marcha (así las
+    corridas de siempre no cambian sus métricas)."""
+    linea = linea_de_tiempo(fuente)
+    grano = veces = ticks = 0
+    for a in linea.ids(CARRO):
+        estados, cargas = linea.estado[a], linea.carga[a]
+        for t in range(1, linea.num_ticks):
+            if estados[t] == "RECIBIENDO_EN_MARCHA":
+                ticks += 1
+                if estados[t - 1] != "RECIBIENDO_EN_MARCHA":
+                    veces += 1
+            if (estados[t - 1] == "RECIBIENDO_EN_MARCHA" and cargas[t] is not None and cargas[t - 1] is not None
+                    and cargas[t] > cargas[t - 1]):
+                grano += cargas[t] - cargas[t - 1]
+    if not veces:
+        return {}
+    return {"grano_en_marcha": grano, "descargas_en_marcha": veces, "ticks_en_marcha": ticks}
 
 
 def suelo_de_carros(fuente) -> dict:

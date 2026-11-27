@@ -325,4 +325,9 @@ Formato por entrada:
   - **Atasco 1, el carro que espera:** al combinar hileras con despacho anticipado aparecieron atascos. El carro que espera a la cosechadora en traslado ahora se aparta de **toda** su ruta, no solo de los dos pasos siguientes, y suelta su plan viejo para no dejar reservas fantasma.
   - **Atasco 2, el giro en el sitio:** ahora acumula su avance (`rutas.progreso_de_giro`). Antes, al replanear cada tick, la máquina empezaba el giro desde cero y nunca salía.
   - **Sin la bandera nada cambia.** Resultados en `docs/resultados_hileras.md`.
+- **H6, descarga en marcha** (`politica.descarga_en_marcha`, requiere hileras; solo actúa con subasta):
+  - el carro hace una cita en el lateral de rastrojo de la pasada actual o de la siguiente;
+  - con la cosechadora a su altura pasa a `RECIBIENDO_EN_MARCHA` y avanzan en paralelo mientras ella le pasa grano;
+  - al vaciarse ella, o llenarse el carro, se envía `TRANSFERENCIA_TERMINADA` como siempre.
+  - **Alternativa descartada:** carro detrás de la cosechadora en la misma fila. Así no está a su lado para recibir, y el sinfín de una cosechadora real descarga hacia un costado.
 

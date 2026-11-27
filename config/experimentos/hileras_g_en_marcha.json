@@ -1,0 +1,9 @@
+{
+  "nombre": "hileras_g_en_marcha",
+  "descripcion": "H6, descarga en marcha (como Machine Sync o Raven Cart Automation): G con hileras, estrategias de subasta (anticipada, anticipada_plus, qlearning y sarsa) × transferencia detenida contra en marcha × 20 seeds. Las tablas de M1 son las de escenario_g_hileras (entrenadas sin descarga en marcha).",
+  "escenarios": ["config/escenario_g_hileras.json"],
+  "estrategias": ["anticipada", "anticipada_plus", "qlearning", "sarsa"],
+  "barrido": {"politica.descarga_en_marcha": [false, true]},
+  "seeds": {"desde": 0, "cantidad": 20},
+  "metrica": "tiempo_ocioso_total"
+}

@@ -51,6 +51,7 @@ python tools/correr_experimento.py config/experimentos/terreno_g_estrategias.jso
 python tools/verificar_terreno.py                                                       # reglas R10, R12 y R13 en G desde el trace
 python -m harvest_sim.cli config/escenario_g_hileras.json --estrategia anticipada_plus     # G con hileras: cabecera, pasadas, vueltas Dubins (trace 2.4)
 python tools/verificar_terreno.py --movimiento hileras                                   # lo mismo con hileras (y R14)
+python -m harvest_sim.cli config/escenario_g_en_marcha.json --estrategia anticipada_plus  # H6: el carro recibe al lado, sin que la cosechadora se detenga
 python tools/kml_a_mapa.py --figura                                                     # regenera config/mapas/el_pueblito.json desde el KML
 ```
 

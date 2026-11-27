@@ -334,6 +334,22 @@ class Mundo:
         self._entradas.update(entradas)
         return recorrido
 
+    def espera_descarga_de(self, cosechadora: str, carro: str) -> bool:
+        """H6: ¿la cosechadora tiene contratado a ese carro y grano que pasarle?"""
+        agente = self._agentes[cosechadora]
+        return getattr(agente, "contratado", None) == carro and agente.carga > 0
+
+    def proximas_pasadas(self, agent_id: str) -> list[tuple[str, list[Celda], int]]:
+        """H6: (rumbo, celdas, ticks para llegar) de la pasada actual y la siguiente de esa cosechadora."""
+        proximas = getattr(self._agentes[agent_id], "proximas_pasadas", None)
+        return proximas(self) if callable(proximas) else []
+
+    def pasada_restante(self, agent_id: str) -> tuple[str, list[Celda]] | None:
+        """H6: (rumbo E/O, celdas que le faltan) de la pasada que la cosechadora está cosechando; None si no está
+        en una pasada (cabecera, traslado o vuelta)."""
+        resto = getattr(self._agentes[agent_id], "pasada_restante", None)
+        return resto(self) if callable(resto) else None
+
     def costos_de_giro(self, carro: bool = False) -> tuple[int, int]:
         """(giro de 90°, media vuelta en K) en ticks extra para el A* con rumbo de los traslados. 90°: el cuarto de
         circunferencia (πR/2) a su velocidad, en ticks (un tick = una celda a velocidad de cosecha), menos el tick

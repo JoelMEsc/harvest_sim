@@ -88,6 +88,9 @@ class Cosechadora:
         self._vuelta_ticks = 0
         self.ticks_en_vueltas = 0
         self._giro: tuple[str, int] | None = None  # giro en el sitio en curso (A* con rumbo)
+        # H6, descarga en marcha: grano pasado al carro en el servicio actual y cuántas descargas en marcha hizo
+        self._en_marcha_total = 0
+        self.descargas_en_marcha = 0
 
         # Administración del servicio (§7).
         self._num_servicio = 0
@@ -192,6 +195,8 @@ class Cosechadora:
                     self._esperar(tick, mundo, f"espera a que se libere {list(siguiente)}")
                     return
                 self._dejar_de_esperar()
+                if politica.get("descarga_en_marcha"):
+                    self._descargar_en_marcha(tick, mundo, buzon, siguiente)
                 self._mover_a(siguiente)
                 self._cosechar_y_evaluar(tick, mundo, buzon, politica)
                 return
@@ -290,6 +295,74 @@ class Cosechadora:
         if llena:
             self._lleno_desde = tick
         self.estado = EstadoCosechadora.LLENA_ESPERANDO if llena else EstadoCosechadora.COSECHANDO
+
+    def pasada_restante(self, mundo: Mundo) -> tuple[str, list[Celda]] | None:
+        """H6: (rumbo, celdas que le faltan) de la pasada en la que cosecha; None si no cosecha una pasada."""
+        if (self.estado != EstadoCosechadora.COSECHANDO or self.posicion in getattr(mundo, "cabecera", ())
+                or self.orientacion not in ("E", "O")):
+            return None
+        dx = 1 if self.orientacion == "E" else -1
+        x, y = self.posicion
+        resto = []
+        for celda in self._camino[self._siguiente:]:
+            if celda != (x + dx, y) or celda in mundo.cabecera:
+                break
+            resto.append(celda)
+            x += dx
+        return (self.orientacion, resto) if resto else None
+
+    def proximas_pasadas(self, mundo: Mundo, cuantas: int = 2) -> list[tuple[str, list[Celda], int]]:
+        """H6: la pasada actual (lo que le falta) y las siguientes de su recorrido: (rumbo, celdas, ticks que faltan
+        para cosechar la primera). Entre pasadas suma la vuelta de Dubins de la cabecera. Sirve al carro para
+        esperarla en el lateral, en el rastrojo, donde ella va a pasar."""
+        resultado: list[tuple[str, list[Celda], int]] = []
+        actual = self.pasada_restante(mundo)
+        t = 1
+        pos, rumbo = self.posicion, self.orientacion
+        indice = self._siguiente
+        if actual is not None:
+            resultado.append((actual[0], actual[1], 1))
+            t += len(actual[1])
+            indice += len(actual[1])
+            pos, rumbo = actual[1][-1], actual[0]
+        camino = self._camino
+        while len(resultado) < cuantas and indice < len(camino):
+            inicio = camino[indice]
+            entrada = mundo.entrada_de_pasada(inicio)
+            if entrada is None:
+                indice += 1  # cabecera: no hay pasada que acompañar
+                continue
+            rumbo_nuevo = entrada[1]
+            dx = 1 if rumbo_nuevo == "E" else -1
+            celdas = [inicio]
+            while indice + len(celdas) < len(camino) and camino[indice + len(celdas)] == (celdas[-1][0] + dx, inicio[1]):
+                celdas.append(camino[indice + len(celdas)])
+            t += max(1, mundo.ticks_de_vuelta(pos, rumbo, inicio) if rumbo in ("E", "O", "N", "S") else 1)
+            resultado.append((rumbo_nuevo, celdas, t))
+            t += len(celdas) - 1
+            indice += len(celdas)
+            pos, rumbo = celdas[-1], rumbo_nuevo
+        return resultado
+
+    def _descargar_en_marcha(self, tick: int, mundo: Mundo, buzon: Buzon, siguiente: Celda) -> None:
+        """H6: si su carro va a su lado (RECIBIENDO_EN_MARCHA) y ella sigue a lo largo de la hilera, le pasa grano
+        antes de avanzar (la tasa de transferencia por tick) sin detenerse. Cuando se vacía, o el carro se llena,
+        termina el servicio con TRANSFERENCIA_TERMINADA, igual que la transferencia detenida."""
+        carro = self.contratado
+        if carro is None or self.carga == 0 or siguiente[1] != self.posicion[1]:
+            return
+        x, y = mundo.posicion(carro)
+        if x != self.posicion[0] or abs(y - self.posicion[1]) != 1 or mundo.estado_de(carro) != "RECIBIENDO_EN_MARCHA":
+            return
+        tasa = mundo.config.tasa_transferencia
+        pasado = mundo.transferir(self.agent_id, carro, min(self.carga, tasa))
+        self._en_marcha_total += pasado
+        if self.carga == 0 or pasado == 0:
+            self._enviar(buzon, TipoMensaje.TRANSFERENCIA_TERMINADA, carro, tick,
+                         {"servicio": self.servicio, "cantidad": self._en_marcha_total})
+            self.servicio, self.contratado, self.propuestas = None, None, {}
+            self._en_marcha_total = 0
+            self.descargas_en_marcha += 1
 
     @staticmethod
     def _entrada(celda: Celda, mundo: Mundo) -> Celda | None:
